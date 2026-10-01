@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 900" role="img" aria-label="Sonic themed blue speed hero">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#063b83"/><stop offset=".55" stop-color="#0b8cff"/><stop offset="1" stop-color="#011a36"/></linearGradient>
+  <radialGradient id="glow"><stop stop-color="#55e7ff" stop-opacity=".9"/><stop offset="1" stop-color="#55e7ff" stop-opacity="0"/></radialGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff59a"/><stop offset=".35" stop-color="#ffd21c"/><stop offset="1" stop-color="#b86d00"/></linearGradient>
+  <pattern id="check" width="44" height="44" patternUnits="userSpaceOnUse"><rect width="44" height="44" fill="#1ca33a"/><rect width="22" height="22" fill="#8ee35b"/><rect x="22" y="22" width="22" height="22" fill="#8ee35b"/></pattern>
+</defs>
+<rect width="700" height="900" rx="40" fill="url(#bg)"/>
+<circle cx="535" cy="180" r="210" fill="url(#glow)"/>
+<path d="M0 690 Q180 600 350 690 T700 690 V900 H0Z" fill="url(#check)" opacity=".85"/>
+<g fill="none" stroke="url(#gold)" stroke-width="18">
+  <ellipse cx="92" cy="145" rx="42" ry="58"/><ellipse cx="610" cy="330" rx="38" ry="54"/>
+  <ellipse cx="555" cy="600" rx="45" ry="62"/><ellipse cx="120" cy="560" rx="34" ry="48"/>
+</g>
+<g opacity=".9" stroke="#fff" stroke-width="8" stroke-linecap="round">
+ <path d="M35 280h155"/><path d="M500 90h150"/><path d="M30 410h105"/><path d="M545 470h120"/>
+</g>
+<!-- original blue speed hero, Sonic-inspired -->
+<g transform="translate(350 430)">
+  <path d="M-110-210 L-250-300 L-145-165 L-285-210 L-135-95 L-270-105 L-120-20 C-145 80-115 205 0 250 C125 205 155 80 120-20 L270-105 L135-95 L285-210 L145-165 L250-300 L110-210 C80-275-80-275-110-210Z" fill="#087ee8" stroke="#06254a" stroke-width="12" stroke-linejoin="round"/>
+  <ellipse cx="0" cy="-65" rx="120" ry="135" fill="#087ee8"/>
+  <ellipse cx="0" cy="15" rx="82" ry="105" fill="#f3c59a"/>
+  <path d="M-72-100 Q-20-150 35-105 Q55-50 10-20 Q-45-10-72-100Z" fill="#fff"/>
+  <path d="M15-105 Q70-145 93-88 Q95-25 45-8 Q15-20 15-105Z" fill="#fff"/>
+  <circle cx="-27" cy="-70" r="18" fill="#111"/><circle cx="48" cy="-67" r="18" fill="#111"/>
+  <path d="M-40 72 Q0 102 42 72" fill="none" stroke="#111" stroke-width="9" stroke-linecap="round"/>
+  <path d="M-90 115 Q-135 145-165 115" fill="none" stroke="#fff" stroke-width="24" stroke-linecap="round"/>
+  <path d="M95 115 Q135 145 170 112" fill="none" stroke="#fff" stroke-width="24" stroke-linecap="round"/>
+  <path d="M-88 230 Q-140 300-225 270 Q-255 230-190 205 Q-130 190-88 230Z" fill="#e52b38" stroke="#06254a" stroke-width="10"/>
+  <path d="M88 230 Q140 300 225 270 Q255 230 190 205 Q130 190 88 230Z" fill="#e52b38" stroke="#06254a" stroke-width="10"/>
+  <path d="M-205 246h105M205 246h-105" stroke="#fff" stroke-width="18" stroke-linecap="round"/>
+</g>
+<g transform="translate(565 755)">
+ <path d="M0-42 L12-13 L44-10 L20 10 L26 42 L0 25 L-26 42 L-20 10 L-44-10 L-12-13Z" fill="#35d9ff" stroke="#fff" stroke-width="5"/>
+</g>
+</svg>
