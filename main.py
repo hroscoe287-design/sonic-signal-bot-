@@ -1,8 +1,8 @@
 import os
+import json
 import threading
 import time
 from pathlib import Path
-from collections import deque
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
@@ -20,7 +20,8 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 ASSET = os.getenv("SONIC_ASSET", "EURUSD_otc")
 PERIOD = int(os.getenv("SONIC_TIMEFRAME_SECONDS", "60"))
 HISTORY = int(os.getenv("SONIC_HISTORY", "300"))
-PO_SSID = os.getenv("PO_SSID", "").strip()
+PO_AUTH_JSON = os.getenv("PO_AUTH_JSON", "").strip()
+POCKET_URL = os.getenv("POCKET_URL", "").strip()
 
 lock = threading.Lock()
 client = None
@@ -37,6 +38,25 @@ feed = {
     "engine": "FRACTAL_3 + DMI_PLUS_MINUS",
 }
 
+def parse_auth(raw):
+    if not raw:
+        return ""
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            for key in ("ssid", "session", "session_id", "user_ssid"):
+                value = data.get(key)
+                if value:
+                    return str(value).strip()
+            # Preserve Ichigo's common Socket.IO auth shape.
+            if data.get("auth") and isinstance(data["auth"], dict):
+                for key in ("ssid", "session", "session_id", "user_ssid"):
+                    value = data["auth"].get(key)
+                    if value:
+                        return str(value).strip()
+    except Exception:
+        pass
+    return raw
 
 def normalize_tick(item):
     if isinstance(item, dict):
@@ -46,7 +66,6 @@ def normalize_tick(item):
     if isinstance(item, (list, tuple)) and len(item) >= 2:
         return float(item[0]), float(item[1])
     return None, None
-
 
 def build_candles(ticks):
     buckets = {}
@@ -61,34 +80,29 @@ def build_candles(ticks):
             c["close"] = price
     return [buckets[k] for k in sorted(buckets)][-HISTORY:]
 
-
 def feed_worker():
     global client
-    if not PO_SSID:
+    auth = parse_auth(PO_AUTH_JSON)
+    if not auth:
         with lock:
-            feed["error"] = "PO_SSID is not configured"
+            feed["error"] = "PO_AUTH_JSON is not configured"
         return
     if PocketOption is None:
         with lock:
             feed["error"] = "PocketOption client failed to install"
         return
-
     try:
-        client = PocketOption(PO_SSID)
+        client = PocketOption(auth)
         ok, err = client.connect()
         if not ok:
             with lock:
                 feed["error"] = str(err or "Pocket Option connection failed")
             return
-
-        # Data only: SONIC never calls buy/order methods.
         client.subscribe(ASSET, period=PERIOD)
-
         with lock:
             feed["feed_connected"] = True
             feed["mode"] = "POCKET_OPTION"
             feed["error"] = None
-
         while True:
             try:
                 ticks = client.get_realtime_ticks(ASSET, limit=max(500, HISTORY * PERIOD // 2))
@@ -97,9 +111,7 @@ def feed_worker():
                     ts, price = normalize_tick(item)
                     if ts is not None and price is not None:
                         normalized.append((ts, price))
-
                 if normalized:
-                    normalized = normalized[-max(500, HISTORY * PERIOD // 2):]
                     candles = build_candles(normalized)
                     last_ts, last_price = normalized[-1]
                     with lock:
@@ -118,16 +130,13 @@ def feed_worker():
             feed["feed_connected"] = False
             feed["error"] = str(exc)
 
-
 @app.on_event("startup")
 def start_feed():
     threading.Thread(target=feed_worker, daemon=True, name="pocket-option-feed").start()
 
-
 @app.get("/")
 async def home():
     return FileResponse(BASE / "static" / "index.html")
-
 
 @app.get("/api/state")
 async def state():
@@ -135,7 +144,6 @@ async def state():
         snapshot = dict(feed)
         snapshot["candles"] = list(feed["candles"])
     return snapshot
-
 
 @app.get("/api/health")
 async def health():
