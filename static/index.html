@@ -17,18 +17,24 @@
     <nav class="tabs"><button class="active">Signals</button><button>Chart</button><button>Performance</button><button>Settings</button></nav>
     <section class="controls">
       <label>ASSET<select id="asset"><option>EURUSD_otc</option><option>GBPUSD_otc</option><option>USDJPY_otc</option></select></label>
-      <label>TIMEFRAME<select id="timeframe">
-        <option>5s</option><option>10s</option><option>15s</option><option>30s</option><option>1m</option><option>2m</option><option>3m</option><option>5m</option><option>10m</option><option>15m</option><option>30m</option><option>1h</option>
-      </select></label>
+      <label>TIMEFRAME<select id="timeframe"><option>5s</option><option>10s</option><option>15s</option><option>30s</option><option>1m</option><option>2m</option><option>3m</option><option>5m</option><option>10m</option><option>15m</option><option>30m</option><option>1h</option></select></label>
       <label class="slider-wrap">PROBABILITY THRESHOLD<input id="threshold" type="range" min="50" max="99" value="80"><span id="thresholdValue">80%</span></label>
       <button class="apply" id="apply">APPLY</button>
     </section>
+    <section class="indicator-settings">
+      <div class="indicator-chip"><b>FRACTAL</b><span>Setting: 3</span></div>
+      <div class="indicator-chip"><b>DMI</b><span>+DI / −DI only</span></div>
+      <div class="indicator-chip"><b>DMI SETTINGS</b><span>ADX smoothing: 14 • DI length: 7</span></div>
+      <div class="indicator-chip"><b>ADX LINE</b><span>Removed</span></div>
+    </section>
     <section class="hero-grid">
-      <div class="chart-card"><div class="card-title">LIVE MARKET CHART <span id="price">—</span></div><canvas id="chart"></canvas>
-        <div class="chart-footer"><span>FRACTAL SETTING: <b>3</b></span><span>DMI: <b>+DI / −DI ONLY</b></span><span>ADX LINE: <b>HIDDEN</b></span></div>
+      <div class="chart-card">
+        <div class="card-title">LIVE MARKET CHART <span id="price">—</span></div>
+        <canvas id="chart"></canvas>
+        <div class="chart-footer"><span>FRACTAL: <b>3</b></span><span>DMI: <b>+DI / −DI ONLY</b></span><span>ADX SMOOTHING: <b>14</b></span><span>DI LENGTH: <b>7</b></span></div>
       </div>
       <aside class="sonic-card"><div class="sonic-glow"></div><div class="sonic-silhouette" aria-hidden="true">⚡</div>
-        <div class="sonic-copy"><div class="small">SONIC ENGINE</div><h1>GOTTA GO<br>FAST.</h1><p>Fractal 3 + directional movement strength. No extra voting layers.</p></div>
+        <div class="sonic-copy"><div class="small">SONIC ENGINE</div><h1>GOTTA GO<br>FAST.</h1><p>Fractal 3 + +DI/−DI directional movement. ADX line removed.</p></div>
       </aside>
     </section>
     <section class="signal-grid">
@@ -39,7 +45,7 @@
     <section class="rules"><h2>SONIC ENGINE RULES</h2><div class="rule-list">
       <div>🟢 <b>PUT:</b> green up Fractal + −DI above +DI + −DI rising + wide cross + strong −DI square.</div>
       <div>🔴 <b>CALL:</b> reverse configuration: down Fractal + +DI rising above −DI + strong +DI square.</div>
-      <div>⚡ <b>WAIT:</b> conflicting or incomplete conditions. The probability slider filters signals.</div>
+      <div>⚡ <b>WAIT:</b> conflicting or incomplete conditions. DMI uses only +DI/−DI; the ADX line is not displayed or used.</div>
     </div></section>
   </main><script src="/static/app.js"></script>
 </body></html>
