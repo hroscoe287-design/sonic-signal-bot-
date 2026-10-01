@@ -20,8 +20,8 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 ASSET = os.getenv("SONIC_ASSET", "EURUSD_otc")
 PERIOD = int(os.getenv("SONIC_TIMEFRAME_SECONDS", "60"))
 HISTORY = int(os.getenv("SONIC_HISTORY", "300"))
+
 PO_AUTH_JSON = os.getenv("PO_AUTH_JSON", "").strip()
-POCKET_URL = os.getenv("POCKET_URL", "").strip()
 
 lock = threading.Lock()
 client = None
@@ -48,12 +48,19 @@ def parse_auth(raw):
                 value = data.get(key)
                 if value:
                     return str(value).strip()
-            # Preserve Ichigo's common Socket.IO auth shape.
-            if data.get("auth") and isinstance(data["auth"], dict):
+            if isinstance(data.get("auth"), dict):
                 for key in ("ssid", "session", "session_id", "user_ssid"):
                     value = data["auth"].get(key)
                     if value:
                         return str(value).strip()
+        elif isinstance(data, list):
+            # Support Socket.IO-style auth payloads without exposing the secret.
+            for item in data:
+                if isinstance(item, dict):
+                    for key in ("ssid", "session", "session_id", "user_ssid"):
+                        value = item.get(key)
+                        if value:
+                            return str(value).strip()
     except Exception:
         pass
     return raw
@@ -91,6 +98,7 @@ def feed_worker():
         with lock:
             feed["error"] = "PocketOption client failed to install"
         return
+
     try:
         client = PocketOption(auth)
         ok, err = client.connect()
@@ -98,20 +106,30 @@ def feed_worker():
             with lock:
                 feed["error"] = str(err or "Pocket Option connection failed")
             return
+
         client.subscribe(ASSET, period=PERIOD)
         with lock:
             feed["feed_connected"] = True
             feed["mode"] = "POCKET_OPTION"
             feed["error"] = None
+
+        # Fast polling keeps the dashboard responsive without changing the
+        # selected candle timeframe.
         while True:
+            cycle_start = time.monotonic()
             try:
-                ticks = client.get_realtime_ticks(ASSET, limit=max(500, HISTORY * PERIOD // 2))
+                ticks = client.get_realtime_ticks(
+                    ASSET,
+                    limit=max(250, min(1000, HISTORY * max(1, PERIOD // 2)))
+                )
                 normalized = []
                 for item in ticks or []:
                     ts, price = normalize_tick(item)
                     if ts is not None and price is not None:
                         normalized.append((ts, price))
+
                 if normalized:
+                    normalized.sort(key=lambda x: x[0])
                     candles = build_candles(normalized)
                     last_ts, last_price = normalized[-1]
                     with lock:
@@ -124,7 +142,12 @@ def feed_worker():
             except Exception as exc:
                 with lock:
                     feed["error"] = str(exc)
-            time.sleep(0.25)
+
+            # Target ~100 ms refresh when the client call is fast; never spin
+            # at 100% CPU if the provider is slower.
+            elapsed = time.monotonic() - cycle_start
+            time.sleep(max(0.05, 0.10 - elapsed))
+
     except Exception as exc:
         with lock:
             feed["feed_connected"] = False
