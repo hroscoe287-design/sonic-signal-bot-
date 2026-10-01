@@ -9,11 +9,12 @@ const thresholdValue=document.getElementById("thresholdValue");
 const priceEl=document.getElementById("price");
 const feedStatus=document.getElementById("feedStatus");
 let points=[];
-let last=1.13920;
 
 threshold.addEventListener("input",()=>thresholdValue.textContent=threshold.value+"%");
 document.getElementById("apply").addEventListener("click",()=>{
-  points=[]; last=1.13920; setWait("Engine reset — waiting for qualifying Fractal + DMI setup");
+  points=[];
+  setWait("Engine reset — waiting for qualifying Fractal + DMI setup");
+  pollState();
 });
 
 function setWait(reason){
@@ -46,13 +47,32 @@ function draw(){
   });ctx.stroke();
 }
 
-function tick(){
-  last += (Math.random()-.48)*.00025;
-  points.push(last); if(points.length>80)points.shift();
-  priceEl.textContent=last.toFixed(5);
-  draw();
-  // This front-end intentionally does not invent a trading signal.
-  // The real engine will set Fractal + DMI values when a live feed is connected.
+function updateFeed(state){
+  if(!state) return;
+  if(state.price != null) priceEl.textContent=Number(state.price).toFixed(5);
+
+  if(state.feed_connected){
+    feedStatus.textContent="LIVE";
+  } else {
+    feedStatus.textContent="WAITING";
+  }
+
+  const candles=Array.isArray(state.candles)?state.candles:[];
+  if(candles.length){
+    points=candles.slice(-80).map(c=>Number(c.close)).filter(Number.isFinite);
+    draw();
+  }
 }
-setInterval(tick,500); tick();
+
+async function pollState(){
+  try{
+    const response=await fetch("/api/state",{cache:"no-store"});
+    if(response.ok) updateFeed(await response.json());
+  }catch(e){
+    feedStatus.textContent="WAITING";
+  }
+}
+
+setInterval(pollState,250);
+pollState();
 setWait("Waiting for qualifying Fractal + DMI setup");
