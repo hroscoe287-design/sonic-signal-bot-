@@ -365,11 +365,24 @@ def feed_worker():
 
                 if normalized:
                     normalized.sort(key=lambda x: x[0])
-                    candles = build_candles(normalized, selected_period)
+                    live_candles = build_candles(normalized, selected_period)
+                    # Keep the seeded history and merge the newest live bars into it.
+                    # Rebuilding only from the short tick buffer can leave fewer than
+                    # 23 candles, which makes ADX(7/14) report "waiting" even though
+                    # the chart still shows DI values from the previous seed.
+                    with lock:
+                        prior = list(feed.get("candles") or [])
+                    merged = {float(x["time"]): x for x in prior if isinstance(x, dict) and x.get("time") is not None}
+                    for x in live_candles:
+                        merged[float(x["time"])] = x
+                    candles = sorted(merged.values(), key=lambda x: float(x["time"]))[-HISTORY:]
                     _update_engine(candles)
                     last_ts, last_price = normalized[-1]
                     with lock:
                         feed["feed_connected"] = True
+                        feed["asset"] = selected_asset
+                        feed["period"] = selected_period
+                        feed["timeframe"] = f"{selected_period}s"
                         feed["price"] = round(last_price, 5)
                         feed["timestamp"] = last_ts
                         feed["age"] = max(0.0, time.time() - last_ts)
@@ -464,10 +477,9 @@ async def config(body: Config):
                 with lock:
                     feed["error"] = f"Subscription switch: {err}"
             else:
-                # Re-seed after every Apply so the chart and ADX/DI never wait
-                # for new candles to rebuild their history.
-                if _seed_dashboard(selected_asset, selected_period) == 0:
-                    with lock: feed["error"] = "No historical candle data returned"
+                # Do not call get_historical_candles from this async request handler.
+                # The Pocket Option client owns its WebSocket event loop; history
+                # seeding is performed by the feed worker thread instead.
     except Exception as exc:
         with lock:
             feed["error"] = f"Subscription switch: {exc}"
