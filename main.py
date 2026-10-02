@@ -5,7 +5,7 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -455,10 +455,17 @@ async def home():
     )
 
 @app.get("/api/state")
-async def state():
+async def state(request: Request):
+    # TV browsers get a compact read-only payload. The phone keeps the full
+    # history/indicator payload; TV only needs enough data to display signals.
+    display = request.query_params.get("display", "")
     with lock:
         snapshot = dict(feed)
         snapshot["candles"] = list(feed["candles"])
+        if display == "tv":
+            snapshot["candles"] = snapshot["candles"][-60:]
+            snapshot["dmi_series"] = list(snapshot.get("dmi_series") or [])[-50:]
+            snapshot["fractal_marks"] = list(snapshot.get("fractal_marks") or [])[-30:]
     return snapshot
 
 def _asset_category(symbol):
