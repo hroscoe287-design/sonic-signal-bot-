@@ -55,7 +55,7 @@ function resize(){
 }
 function draw(){
   var w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);ctx.fillStyle="#071018";ctx.fillRect(0,0,w,h);
-  if(candles.length<2){ctx.fillStyle="#8ca5b8";ctx.font="14px sans-serif";ctx.fillText("Waiting for live candles...",18,30);return;}
+  if(candles.length<1){ctx.fillStyle="#8ca5b8";ctx.font="14px sans-serif";ctx.fillText("Loading live candles...",18,30);return;}
   var left=52,right=12,top=14,bottom=h-14,view=candles.slice(Math.max(0,candles.length-70)),hi=-Infinity,lo=Infinity,i,c;
   for(i=0;i<view.length;i++){c=view[i];hi=Math.max(hi,Number(c.high));lo=Math.min(lo,Number(c.low));}
   var range=hi-lo||0.0001,step=(w-left-right)/view.length;
@@ -63,6 +63,18 @@ function draw(){
   ctx.strokeStyle="rgba(120,190,230,.12)";ctx.lineWidth=1;
   for(i=0;i<6;i++){var y=top+i*(bottom-top)/5;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();ctx.fillStyle="#718798";ctx.font="10px sans-serif";ctx.fillText((hi-i*range/5).toFixed(5),4,y+3);}
   for(i=0;i<view.length;i++){c=view[i];var x=left+i*step+step/2,o=yp(Number(c.open)),cl=yp(Number(c.close)),hh=yp(Number(c.high)),ll=yp(Number(c.low)),up=Number(c.close)>=Number(c.open);ctx.strokeStyle=up?"#35d98a":"#ff5c70";ctx.fillStyle=ctx.strokeStyle;ctx.beginPath();ctx.moveTo(x,hh);ctx.lineTo(x,ll);ctx.stroke();ctx.fillRect(x-Math.max(1,step*.31),Math.min(o,cl),Math.max(2,step*.62),Math.max(2,Math.abs(cl-o)));}
+  // Draw confirmed Fractal 3 arrows directly on the main price chart.
+  // Marks are time-aligned, so changing timeframe automatically redraws them.
+  var marks=Array.isArray(state.fractal_marks)?state.fractal_marks:[];
+  for(i=0;i<marks.length;i++){
+    var mk=marks[i], mi=-1, j;
+    for(j=0;j<view.length;j++){if(Number(view[j].time)===Number(mk.time)){mi=j;break;}}
+    if(mi<0)continue;
+    var mx=left+mi*step+step/2, my=yp(Number(mk.price)), upMark=String(mk.type)==="UP";
+    ctx.fillStyle=upMark?"#35d98a":"#ff5c70";ctx.beginPath();
+    if(upMark){ctx.moveTo(mx,my+10);ctx.lineTo(mx-6,my+20);ctx.lineTo(mx+6,my+20);}else{ctx.moveTo(mx,my-10);ctx.lineTo(mx-6,my-20);ctx.lineTo(mx+6,my-20);}
+    ctx.closePath();ctx.fill();
+  }
 }
 function drawAdx(){
   if(!adxCanvas||!adxCtx)return;
