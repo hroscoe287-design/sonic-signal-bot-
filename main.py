@@ -431,33 +431,43 @@ def start_feed():
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    # Match Ichigo's TV-safe delivery pattern: serve the dashboard as one
-    # server-rendered document with CSS and JavaScript inlined. This avoids
-    # older Smart-TV browsers failing while loading separate static assets.
+    # Ichigo-style TV-safe delivery: server-render controls and initial state,
+    # then inline the existing Sonic JS without changing its strategy/layout.
     html = (BASE / "static" / "index.html").read_text(encoding="utf-8")
     css = (BASE / "static" / "style.css").read_text(encoding="utf-8")
     js = (BASE / "static" / "app.js").read_text(encoding="utf-8")
-    ua=(request.headers.get("user-agent") or "").lower()
-    tv_server = ("tv" in ua or "smart-tv" in ua or "smarttv" in ua or "tizen" in ua or "webos" in ua or "hbbtv" in ua or "bravia" in ua or request.query_params.get("tv") == "1")
-    if tv_server:
-        html=html.replace("<html lang=\"en\">", '<html lang="en" class="sonic-tv-mode">')
-    html = html.replace(
-        '<link rel="stylesheet" href="/static/style.css?v=sonic4">',
-        '<style>\\n' + css + '\\n</style>'
-    )
-    html = html.replace(
-        '<script src="/static/app.js?v=sonic4"></script>',
-        '<script>\\n' + js + '\\n</script>'
-    )
-    return HTMLResponse(
-        content=html,
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-            "Pragma": "no-cache",
-            "Expires": "0",
-        },
-    )
 
+    opts = []
+    for item in sorted(set(ASSETS or STATIC_ASSET_FALLBACK), key=str.upper):
+        selected = " selected" if item == selected_asset else ""
+        opts.append(f"<option value=\"{item}\"{selected}>{item}</option>")
+    asset_markup = "<select id=\"asset\" aria-label=\"Asset\">" + "".join(opts) + "</select>"
+
+    tf_opts = []
+    for tf in TIMEFRAMES:
+        selected = " selected" if tf == selected_period else ""
+        tf_opts.append(f"<option value=\"{tf}\"{selected}>{tf}s</option>")
+    tf_markup = "<select id=\"timeframe\" aria-label=\"Timeframe\">" + "".join(tf_opts) + "</select>"
+
+    html = html.replace('<select id="asset"></select>', asset_markup)
+    html = html.replace('<select id="timeframe"></select>', tf_markup)
+    html = html.replace('<link rel="stylesheet" href="/static/style.css?v=sonic4">', "<style>" + css + "</style>")
+    html = html.replace('<script src="/static/app.js?v=sonic4"></script>', "<script>" + js + "</script>")
+
+    ua = (request.headers.get("user-agent") or "").lower()
+    tv = any(x in ua for x in ("smart-tv","smarttv","tizen","webos","hbbtv","bravia")) or request.query_params.get("tv") == "1"
+    if tv:
+        html = html.replace("<html lang=\"en\">", '<html lang="en" class="sonic-tv-mode">')
+
+    # Server-render live status so an older TV never starts from an empty shell.
+    with lock:
+        snap = dict(feed)
+    age = None if snap.get("timestamp") is None else max(0, time.time() - float(snap["timestamp"]))
+    live = bool(snap.get("feed_connected") and age is not None and age <= 10)
+    html = html.replace("FEED: WAITING", "FEED: " + ("LIVE" if live else "WAITING"), 1)
+    html = html.replace("AGE: —", "AGE: " + ("—" if age is None else "%.2fs" % age), 1)
+    html = html.replace("ENGINE: WAITING", "ENGINE: " + ("READY" if snap.get("candles") else "WAITING_FOR_FEED"), 1)
+    return HTMLResponse(content=html, headers={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","Pragma":"no-cache","Expires":"0"})
 @app.get("/api/state")
 async def state(request: Request):
     # TV browsers get a compact read-only payload. The phone keeps the full
