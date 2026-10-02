@@ -322,7 +322,7 @@ def feed_worker():
             return
 
         live = client.get_assets() or {}
-        live_names = [str(symbol) for symbol, info in live.items() if isinstance(info, dict) and info.get("is_available", True)]
+        live_names = [str(symbol) for symbol in live.keys()]\n        # Pocket Option can report only one symbol as "available" even while\n        # the rest of its catalog is selectable. Keep the full catalog so the\n        # dashboard dropdown is not reduced to EURUSD_otc.\n        if len(live_names) < 2:\n            live_names = list(STATIC_ASSET_FALLBACK)
         with lock:
             ASSETS.clear()
             ASSETS.extend(sorted(set(live_names or STATIC_ASSET_FALLBACK)))
