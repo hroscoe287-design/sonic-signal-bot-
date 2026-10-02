@@ -476,10 +476,8 @@ async def config(body: Config):
             if not ok:
                 with lock:
                     feed["error"] = f"Subscription switch: {err}"
-            else:
-                # Do not call get_historical_candles from this async request handler.
-                # The Pocket Option client owns its WebSocket event loop; history
-                # seeding is performed by the feed worker thread instead.
+            # History seeding is intentionally handled by the feed worker thread.
+            # The Pocket Option client owns its WebSocket event loop.
     except Exception as exc:
         with lock:
             feed["error"] = f"Subscription switch: {exc}"
