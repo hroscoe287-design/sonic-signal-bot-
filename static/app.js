@@ -72,7 +72,44 @@ function drawAdx(){
 
 function clocks(){const now=new Date(),zones={local:Intl.DateTimeFormat().resolvedOptions().timeZone,ny:"America/New_York",london:"Europe/London",tokyo:"Asia/Tokyo"};Object.entries(zones).forEach(([id,z])=>{let e=document.getElementById("clock-"+id);if(e)e.textContent=new Intl.DateTimeFormat("en-US",{timeZone:z,hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(now)});let p=Number(state.period||60),r=p-(Math.floor(Date.now()/1000)%p),e=document.getElementById("countdown");if(e)e.textContent=String(Math.floor(r/60)).padStart(2,"0")+":"+String(r%60).padStart(2,"0")}
 
-async function loadAssets(){try{let d=await(await fetch("/api/assets",{cache:"no-store"})).json();assetEl.innerHTML="";d.assets.forEach(x=>{let o=document.createElement("option");o.value=x;o.textContent=x;assetEl.appendChild(o)});timeframeEl.innerHTML="";d.timeframes.forEach(x=>{let o=document.createElement("option");o.value=x;o.textContent=x<60?x+"s":x/60+"m";timeframeEl.appendChild(o)})}catch(e){}}
+async function loadAssets(){
+  try{
+    const d=await(await fetch("/api/assets",{cache:"no-store"})).json();
+    const previous=state.asset||assetEl.value;
+    assetEl.innerHTML="";
+    const groups=d.asset_groups||{};
+    const order=["Forex","Crypto","Indices","Commodities","Stocks","Other"];
+    order.forEach(category=>{
+      const items=Array.isArray(groups[category])?groups[category]:[];
+      if(!items.length)return;
+      const group=document.createElement("optgroup");
+      group.label=category.toUpperCase();
+      items.forEach(symbol=>{
+        const o=document.createElement("option");
+        o.value=symbol;
+        o.textContent=symbol;
+        group.appendChild(o);
+      });
+      assetEl.appendChild(group);
+    });
+    // Backward-compatible fallback if an older API response is cached.
+    if(!assetEl.options.length){
+      (d.assets||[]).forEach(symbol=>{
+        const o=document.createElement("option");
+        o.value=symbol;o.textContent=symbol;assetEl.appendChild(o);
+      });
+    }
+    if(previous && [...assetEl.options].some(o=>o.value===previous)) assetEl.value=previous;
+    timeframeEl.innerHTML="";
+    d.timeframes.forEach(x=>{
+      const o=document.createElement("option");
+      o.value=x;o.textContent=x<60?x+"s":x/60+"m";
+      timeframeEl.appendChild(o);
+    });
+  }catch(e){
+    console.error("Asset catalog load failed",e);
+  }
+}
 
 function updateFeed(s){
   state=s;candles=Array.isArray(s.candles)?s.candles:[];dmi=Array.isArray(s.dmi_series)?s.dmi_series:[];
