@@ -11,7 +11,7 @@
   <main class="app">
     <header class="topbar">
       <div><div class="brand"><span class="ring">⚡</span> SONIC SIGNAL BOT</div>
-      <div class="subtitle">SPEED MARKET INTELLIGENCE • FRACTAL + DMI ENGINE</div></div>
+      <div class="subtitle">SPEED MARKET INTELLIGENCE • FRACTAL + ADX DI ENGINE</div></div>
       <div class="status" id="feedStatus">FEED: DEMO</div>
     </header>
     <nav class="tabs"><button class="active">Signals</button><button>Chart</button><button>Performance</button><button>Settings</button></nav>
@@ -23,29 +23,29 @@
     </section>
     <section class="indicator-settings">
       <div class="indicator-chip"><b>FRACTAL</b><span>Setting: 3</span></div>
-      <div class="indicator-chip"><b>DMI + ADX</b><span>+DI / −DI + ADX</span></div>
-      <div class="indicator-chip"><b>DMI SETTINGS</b><span>ADX smoothing: 14 • DI length: 7</span></div>
-      <div class="indicator-chip"><b>ADX SETTINGS</b><span>ADX smoothing: 14</span></div>
+      <div class="indicator-chip"><b>ADX</b><span>+DI / −DI</span></div>
+      <div class="indicator-chip"><b>ADX SETTINGS</b><span>DI length: 7 • smoothing: 14</span></div>
+      <div class="indicator-chip"><b>ADX LINE</b><span>NOT USED</span></div>
     </section>
     <section class="market-strip"><div><b>ENTRY COUNTDOWN</b><strong id="countdown">—</strong></div><div><b>LOCAL</b><strong id="clock-local">—</strong></div><div><b>NEW YORK</b><strong id="clock-ny">—</strong></div><div><b>LONDON</b><strong id="clock-london">—</strong></div><div><b>TOKYO</b><strong id="clock-tokyo">—</strong></div></section><section class="hero-grid">
       <div class="chart-card">
         <div class="card-title">LIVE MARKET CHART <span id="price">—</span></div>
         <canvas id="chart"></canvas>
-        <div class="chart-footer"><span>FRACTAL: <b>3</b></span><span>DMI: <b>+DI / −DI</b></span><span>ADX: <b>14</b></span><span>DI LENGTH: <b>7</b></span><span id="diValues">+DI — • −DI —</span></div>
+        <div class="chart-footer"><span>FRACTAL: <b>3</b></span><span>ADX: <b>+DI / −DI</b></span><span>ADX: <b>14</b></span><span>DI LENGTH: <b>7</b></span><span id="diValues">+DI — • −DI —</span></div>
       </div>
       <aside class="sonic-card"><div class="sonic-glow"></div><div class="ring-field" aria-hidden="true"><i>○</i><i>○</i><i>○</i><i>○</i></div><img class="sonic-art" src="/static/sonic-hero.svg" alt="Sonic themed speed hero with gold rings">
-        <div class="sonic-copy"><div class="small">⚡ SONIC ENGINE • RING BOOST</div><h1>GOTTA GO<br>FAST.</h1><p>Fast live candles with Fractal 3 + +DI/−DI + ADX 14 confirmation.</p></div>
+        <div class="sonic-copy"><div class="small">⚡ SONIC ENGINE • RING BOOST</div><h1>GOTTA GO<br>FAST.</h1><p>Fast live candles with Fractal 3 + ADX +DI/−DI confirmation.</p></div>
       </aside>
     </section>
     <section class="signal-grid">
-      <div class="signal-card"><div class="label">SIGNAL</div><div class="signal wait" id="signal">WAIT</div><div class="reason" id="reason">Waiting for qualifying Fractal + DMI setup</div></div>
+      <div class="signal-card"><div class="label">SIGNAL</div><div class="signal wait" id="signal">WAIT</div><div class="reason" id="reason">Waiting for qualifying Fractal 3 + ADX DI setup</div></div>
       <div class="signal-card"><div class="label">ENGINE CONFIDENCE</div><div class="confidence" id="confidence">0%</div><div class="meter"><span id="meter"></span></div></div>
-      <div class="signal-card"><div class="label">DMI STRENGTH</div><div class="di-row"><span class="up">+DI</span><span id="plusSquares">□□□□□</span></div><div class="di-row"><span class="down">−DI</span><span id="minusSquares">□□□□□</span></div></div>
+      <div class="signal-card"><div class="label">ADX DI STRENGTH</div><div class="di-row"><span class="up">+DI</span><span id="plusSquares">□□□□□</span></div><div class="di-row"><span class="down">−DI</span><span id="minusSquares">□□□□□</span></div></div>
     </section>
     <section class="rules"><h2>SONIC ENGINE RULES</h2><div class="rule-list">
       <div>🟢 <b>PUT:</b> green up Fractal + −DI above +DI + −DI rising + wide cross + strong −DI square.</div>
       <div>🔴 <b>CALL:</b> reverse configuration: down Fractal + +DI rising above −DI + strong +DI square.</div>
-      <div>⚡ <b>WAIT:</b> conflicting or incomplete conditions. DMI uses only +DI/−DI; the ADX line is not displayed or used.</div>
+      <div>⚡ <b>WAIT:</b> conflicting or incomplete conditions. ADX uses only its +DI/−DI lines; the ADX main line is not used.</div>
     </div></section>
   </main><script src="/static/app.js"></script>
 </body></html>
