@@ -109,7 +109,9 @@ def _wilder(vals, n):
     return out
 
 def _adx(candles, di_length=7, adx_smoothing=14):
-    if len(candles)<di_length+adx_smoothing+2: return None
+    # Sonic uses +DI / -DI for the decision. DI only needs the configured
+    # DI length; do not block the panel on the separate ADX smoothing window.
+    if len(candles)<di_length+1: return None
     h=[c["high"] for c in candles]; l=[c["low"] for c in candles]; cl=[c["close"] for c in candles]
     tr=[]; plus=[]; minus=[]
     for j in range(1,len(candles)):
@@ -200,7 +202,7 @@ def _evaluate(c):
 
 def _indicator_series(candles, di_length=7, adx_smoothing=14):
     rows=[]
-    if len(candles)<di_length+adx_smoothing+2: return rows
+    if len(candles)<di_length+1: return rows
     for i in range(4, len(candles)+1):
         d=_adx(candles[:i], di_length, adx_smoothing)
         if d:
