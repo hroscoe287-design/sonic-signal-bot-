@@ -43,9 +43,10 @@ feed = {
     "candles": [],
     "error": None,
     "asset_count": 0,
-    "engine": "FRACTAL_3 + DMI_PLUS_MINUS",
+    "engine": "ADX_DI7_SMOOTH14 + FRACTAL3",
     "signal": "WAIT", "confidence": 0, "reason": "Waiting for qualifying setup",
-    "fractal": None, "plus_di": None, "minus_di": None, "plus_strength": 0, "minus_strength": 0, "wide_cross": False,\n    "dmi_series": [], "fractal_marks": [],
+    "fractal": None, "plus_di": None, "minus_di": None, "plus_strength": 0, "minus_strength": 0, "wide_cross": False,
+    "dmi_series": [], "fractal_marks": [],
 }
 
 def parse_auth(raw):
@@ -106,21 +107,21 @@ def _wilder(vals, n):
         prev=((prev*(n-1))+v)/n; out.append(prev)
     return out
 
-def _dmi(candles, n=7):
-    if len(candles)<n+3: return None
+def _adx(candles, di_length=7, adx_smoothing=14):
+    if len(candles)<di_length+adx_smoothing+2: return None
     h=[c["high"] for c in candles]; l=[c["low"] for c in candles]; cl=[c["close"] for c in candles]
     tr=[]; plus=[]; minus=[]
     for j in range(1,len(candles)):
         up=h[j]-h[j-1]; down=l[j-1]-l[j]
         plus.append(up if up>down and up>0 else 0); minus.append(down if down>up and down>0 else 0)
         tr.append(max(h[j]-l[j],abs(h[j]-cl[j-1]),abs(l[j]-cl[j-1])))
-    atr=_wilder(tr,n); ps=_wilder(plus,n); ms=_wilder(minus,n)
+    atr=_wilder(tr,di_length); ps=_wilder(plus,di_length); ms=_wilder(minus,di_length)
     q=min(len(atr),len(ps),len(ms))
     if q<3:return None
     p=[ps[j]/atr[j]*100 if atr[j] else 0 for j in range(q)]
     mn=[ms[j]/atr[j]*100 if atr[j] else 0 for j in range(q)]
     dx=[(abs(p[j]-mn[j])/max(1e-9,p[j]+mn[j]))*100 for j in range(q)]
-    adx_vals=_wilder(dx,14)
+    adx_vals=_wilder(dx,adx_smoothing)
     adx=adx_vals[-1] if adx_vals else 0
     return {"plus":p[-1],"minus":mn[-1],"plus_prev":p[-2],"minus_prev":mn[-2],"adx":adx}
 
@@ -132,7 +133,7 @@ def _fractal3(c):
     return None
 
 def _evaluate(c):
-    f=_fractal3(c); d=_dmi(c)
+    f=_fractal3(c); d=_adx(c,7,14)
     if not f or not d:
         return "WAIT",0,"Waiting for complete Fractal 3 + DMI setup",f,d
 
@@ -155,19 +156,19 @@ def _evaluate(c):
 
     if f=="UP" and d["minus"]>=d["plus"]:
         label="WIDE" if wide else ("MEDIUM" if gap>=3 else "SMALL")
-        return "PUT",conf,f"Fractal UP + −DI on top ({label} overlap)",f,d
+        return "PUT",conf,f"Fractal UP + −DI on top ({label})",f,d
 
     if f=="DOWN" and d["plus"]>=d["minus"]:
         label="WIDE" if wide else ("MEDIUM" if gap>=3 else "SMALL")
-        return "CALL",conf,f"Fractal DOWN + +DI on top ({label} overlap)",f,d
+        return "CALL",conf,f"Fractal DOWN + +DI on top ({label})",f,d
 
     return "WAIT",0,"Fractal and DI direction are conflicting",f,d
 
-def _indicator_series(candles, n=7):
+def _indicator_series(candles, di_length=7, adx_smoothing=14):
     rows=[]
-    if len(candles)<n+3: return rows
+    if len(candles)<di_length+adx_smoothing+2: return rows
     for i in range(4, len(candles)+1):
-        d=_dmi(candles[:i], n)
+        d=_adx(candles[:i], di_length, adx_smoothing)
         if d:
             rows.append({"time":candles[i-1]["time"],"plus":round(d["plus"],2),"minus":round(d["minus"],2),"adx":round(d.get("adx",0),2)})
     return rows
@@ -254,7 +255,7 @@ def feed_worker():
                         feed["timestamp"] = last_ts
                         feed["age"] = max(0.0, time.time() - last_ts)
                         feed["candles"] = candles
-                        feed["dmi_series"] = _indicator_series(candles, 7)[-120:]
+                        feed["dmi_series"] = _indicator_series(candles, 7, 14)[-120:]
                         feed["fractal_marks"] = _fractal_marks(candles)[-40:]
                         feed["error"] = None
             except Exception as exc:
@@ -323,6 +324,6 @@ async def health():
             "asset": feed["asset"],
             "timeframe": feed["timeframe"],
             "error": feed["error"],
-            "engine": "SONIC_FRACTAL_DMI",
+            "engine": "SONIC_ADX_DI7_SMOOTH14_FRACTAL3",
             "asset_count": feed["asset_count"],
         }
