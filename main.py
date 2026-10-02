@@ -119,7 +119,10 @@ def _dmi(candles, n=7):
     if q<3:return None
     p=[ps[j]/atr[j]*100 if atr[j] else 0 for j in range(q)]
     mn=[ms[j]/atr[j]*100 if atr[j] else 0 for j in range(q)]
-    return {"plus":p[-1],"minus":mn[-1],"plus_prev":p[-2],"minus_prev":mn[-2]}
+    dx=[(abs(p[j]-mn[j])/max(1e-9,p[j]+mn[j]))*100 for j in range(q)]
+    adx_vals=_wilder(dx,14)
+    adx=adx_vals[-1] if adx_vals else 0
+    return {"plus":p[-1],"minus":mn[-1],"plus_prev":p[-2],"minus_prev":mn[-2],"adx":adx}
 
 def _fractal3(c):
     if len(c)<5:return None
@@ -166,7 +169,7 @@ def _indicator_series(candles, n=7):
     for i in range(4, len(candles)+1):
         d=_dmi(candles[:i], n)
         if d:
-            rows.append({"time":candles[i-1]["time"],"plus":round(d["plus"],2),"minus":round(d["minus"],2)})
+            rows.append({"time":candles[i-1]["time"],"plus":round(d["plus"],2),"minus":round(d["minus"],2),"adx":round(d.get("adx",0),2)})
     return rows
 
 def _fractal_marks(candles):
