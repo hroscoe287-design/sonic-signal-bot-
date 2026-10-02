@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from pydantic import BaseModel
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 try:
@@ -429,9 +429,30 @@ def feed_supervisor():
 def start_feed():
     threading.Thread(target=feed_supervisor, daemon=True, name="pocket-option-feed-supervisor").start()
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def home():
-    return FileResponse(BASE / "static" / "index.html")
+    # Match Ichigo's TV-safe delivery pattern: serve the dashboard as one
+    # server-rendered document with CSS and JavaScript inlined. This avoids
+    # older Smart-TV browsers failing while loading separate static assets.
+    html = (BASE / "static" / "index.html").read_text(encoding="utf-8")
+    css = (BASE / "static" / "style.css").read_text(encoding="utf-8")
+    js = (BASE / "static" / "app.js").read_text(encoding="utf-8")
+    html = html.replace(
+        '<link rel="stylesheet" href="/static/style.css?v=sonic4">',
+        '<style>\\n' + css + '\\n</style>'
+    )
+    html = html.replace(
+        '<script src="/static/app.js?v=sonic4"></script>',
+        '<script>\\n' + js + '\\n</script>'
+    )
+    return HTMLResponse(
+        content=html,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 @app.get("/api/state")
 async def state():
