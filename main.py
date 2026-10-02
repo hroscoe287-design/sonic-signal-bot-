@@ -240,6 +240,56 @@ def _subscribe_stream(asset, period):
         return False, str(exc)
 
 
+def _load_history(asset, period):
+    """Load a full candle seed so chart + ADX/DI are populated immediately."""
+    if not client:
+        return []
+    rows=[]
+    try:
+        rows=client.get_historical_candles(asset, period, offset=max(12000, period*HISTORY*3), count_request=1) or []
+    except Exception:
+        rows=[]
+    normalized=[]
+    for item in rows:
+        try:
+            if isinstance(item, dict):
+                ts=float(item.get("time", item.get("timestamp", item.get("ts"))))
+                o=float(item["open"]); h=float(item["high"]); l=float(item["low"]); cl=float(item["close"])
+            elif isinstance(item,(list,tuple)) and len(item)>=5:
+                ts=float(item[0]); o=float(item[1]); cl=float(item[2]); h=float(item[3]); l=float(item[4])
+            else:
+                continue
+            normalized.append({"time":ts,"open":o,"high":h,"low":l,"close":cl})
+        except (TypeError,ValueError,KeyError):
+            continue
+    normalized.sort(key=lambda x:x["time"])
+    return normalized[-HISTORY:]
+
+
+def _seed_dashboard(asset, period):
+    candles=_load_history(asset, period)
+    if not candles:
+        try:
+            ticks=client.get_realtime_ticks(asset, limit=max(250, min(1500, HISTORY*max(2,period//2)))) or []
+            normalized=[]
+            for item in ticks:
+                ts,price=normalize_tick(item)
+                if ts is not None and price is not None: normalized.append((ts,price))
+            candles=build_candles(sorted(normalized),period)
+        except Exception:
+            candles=[]
+    if candles:
+        with lock:
+            feed["candles"]=candles
+            feed["dmi_series"]=_indicator_series(candles,7,14)[-120:]
+            feed["fractal_marks"]=_fractal_marks(candles)[-80:]
+            feed["price"]=round(float(candles[-1]["close"]),8)
+            feed["timestamp"]=float(candles[-1]["time"])
+            feed["age"]=max(0.0,time.time()-float(candles[-1]["time"]))
+        _update_engine(candles)
+    return len(candles)
+
+
 def _update_engine(candles):
     s,conf,reason,f,d=_evaluate(candles)
     with lock:
@@ -289,24 +339,9 @@ def feed_worker():
                 feed["error"] = f"Stream subscription failed: {sub_error}"
             return
 
-        # Seed fast timeframes with historical ticks so DI is available
-        # immediately instead of waiting for 23+ new 5-second bars.
-        try:
-            seed = client.get_historical_candles(selected_asset, selected_period, offset=9000, count_request=1) or []
-            if seed:
-                seed = seed[-HISTORY:]
-                with lock:
-                    feed["candles"] = seed
-                    feed["dmi_series"] = _indicator_series(seed, 7, 14)[-120:]
-                    feed["fractal_marks"] = _fractal_marks(seed)[-40:]
-                    if seed:
-                        feed["price"] = round(float(seed[-1]["close"]), 8)
-                        feed["timestamp"] = float(seed[-1]["time"])
-                        feed["age"] = max(0.0, time.time() - float(seed[-1]["time"]))
-                _update_engine(seed)
-        except Exception as exc:
-            with lock:
-                feed["error"] = f"History seed: {exc}"
+        # Seed the chart and ADX/DI immediately with historical candles.
+        if _seed_dashboard(selected_asset, selected_period) == 0:
+            with lock: feed["error"] = "No historical candle data returned"
 
         with lock:
             feed["feed_connected"] = True
@@ -428,6 +463,11 @@ async def config(body: Config):
             if not ok:
                 with lock:
                     feed["error"] = f"Subscription switch: {err}"
+            else:
+                # Re-seed after every Apply so the chart and ADX/DI never wait
+                # for new candles to rebuild their history.
+                if _seed_dashboard(selected_asset, selected_period) == 0:
+                    with lock: feed["error"] = "No historical candle data returned"
     except Exception as exc:
         with lock:
             feed["error"] = f"Subscription switch: {exc}"
