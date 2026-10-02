@@ -3,6 +3,8 @@ const signalEl=document.getElementById("signal"),reasonEl=document.getElementByI
 let state={}, candles=[], dmi=[];
 let controlsInitialized=false;
 let applyingConfig=false;
+let pendingAsset=null;
+let pendingTimeframe=null;
 
 document.querySelectorAll(".tabs button").forEach(btn=>{
   btn.addEventListener("click",()=>{
@@ -26,8 +28,8 @@ function showSelectedAsset(){
   if(selectedAssetEl) selectedAssetEl.textContent=asset;
   if(selectedTimeframeEl) selectedTimeframeEl.textContent="TIMEFRAME: "+(p<60?p+"s":(p%60===0?p/60+"m":p+"s"));
 }
-assetEl.addEventListener("change",showSelectedAsset);
-timeframeEl.addEventListener("change",showSelectedAsset);
+assetEl.addEventListener("change",()=>{pendingAsset=assetEl.value;showSelectedAsset()});
+timeframeEl.addEventListener("change",()=>{pendingTimeframe=Number(timeframeEl.value);showSelectedAsset()});
 threshold.addEventListener("input",()=>thresholdValue.textContent=threshold.value+"%");
 document.getElementById("apply").addEventListener("click",async()=>{
   applyingConfig=true;
@@ -38,6 +40,7 @@ document.getElementById("apply").addEventListener("click",async()=>{
     const result=await r.json();
     if(result.ok){
       state.asset=asset; state.period=timeframe; state.timeframe=timeframe+"s";
+      pendingAsset=asset; pendingTimeframe=timeframe;
       if([...assetEl.options].some(o=>o.value===asset)) assetEl.value=asset;
       if([...timeframeEl.options].some(o=>Number(o.value)===timeframe)) timeframeEl.value=String(timeframe);
       if(selectedAssetEl) selectedAssetEl.textContent=asset;
@@ -151,8 +154,10 @@ async function loadAssets(){
 function updateFeed(s){
   state=s;candles=Array.isArray(s.candles)?s.candles:[];dmi=Array.isArray(s.dmi_series)?s.dmi_series:[];
   priceEl.textContent=s.price!=null?Number(s.price).toFixed(8):"—";feedStatus.textContent=s.feed_connected?"LIVE":"WAITING";
-  if(s.asset && [...assetEl.options].some(o=>o.value===s.asset)) assetEl.value=s.asset;
-  if(s.period && [...timeframeEl.options].some(o=>Number(o.value)===Number(s.period))) timeframeEl.value=String(s.period);
+  if(s.asset && [...assetEl.options].some(o=>o.value===s.asset) && (pendingAsset===null || s.asset===pendingAsset)) assetEl.value=s.asset;
+  if(s.period && [...timeframeEl.options].some(o=>Number(o.value)===Number(s.period)) && (pendingTimeframe===null || Number(s.period)===pendingTimeframe)) timeframeEl.value=String(s.period);
+  if(pendingAsset!==null && s.asset===pendingAsset) pendingAsset=null;
+  if(pendingTimeframe!==null && Number(s.period)===pendingTimeframe) pendingTimeframe=null;
   if(s.asset && selectedAssetEl) selectedAssetEl.textContent=s.asset;
   if(s.period && selectedTimeframeEl){
     const p=Number(s.period);
