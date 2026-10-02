@@ -1,4 +1,4 @@
-const canvas=document.getElementById("chart"),ctx=canvas.getContext("2d");
+const canvas=document.getElementById("chart"),ctx=canvas.getContext("2d"),adxCanvas=document.getElementById("adxChart"),adxCtx=adxCanvas.getContext("2d");
 const signalEl=document.getElementById("signal"),reasonEl=document.getElementById("reason"),confidenceEl=document.getElementById("confidence"),meter=document.getElementById("meter"),threshold=document.getElementById("threshold"),thresholdValue=document.getElementById("thresholdValue"),priceEl=document.getElementById("price"),feedStatus=document.getElementById("feedStatus"),assetEl=document.getElementById("asset"),timeframeEl=document.getElementById("timeframe");
 let state={}, candles=[], dmi=[];
 
@@ -8,7 +8,7 @@ document.getElementById("apply").addEventListener("click",async()=>{
   await pollState();
 });
 
-function resize(){const d=devicePixelRatio||1,r=canvas.getBoundingClientRect();canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);draw()}
+function resize(){const d=devicePixelRatio||1,r=canvas.getBoundingClientRect(),ar=adxCanvas.getBoundingClientRect();canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);adxCanvas.width=ar.width*d;adxCanvas.height=ar.height*d;adxCtx.setTransform(d,0,0,d,0,0);draw();drawAdx()}
 window.addEventListener("resize",resize);resize();
 
 function draw(){
@@ -16,7 +16,7 @@ function draw(){
   ctx.clearRect(0,0,w,h);
   ctx.fillStyle="#071018";ctx.fillRect(0,0,w,h);
   if(candles.length<2){ctx.fillStyle="#8ca5b8";ctx.font="14px sans-serif";ctx.fillText("Waiting for live candles…",18,30);return}
-  const left=52,right=12,top=14,priceBottom=h*0.67,dmiTop=h*0.73,dmiBottom=h-24;
+  const left=52,right=12,top=14,priceBottom=h-14;
   const view=candles.slice(-70);
   const hi=Math.max(...view.map(c=>Number(c.high))),lo=Math.min(...view.map(c=>Number(c.low))),range=hi-lo||0.0001;
   const xStep=(w-left-right)/view.length;
@@ -35,17 +35,25 @@ function draw(){
     const p=byTime.get(Number(m.time));if(!p)return;
     const y=yPrice(Number(m.price));ctx.fillStyle=m.type==="UP"?"#35d98a":"#ff5c70";ctx.font="bold 14px sans-serif";ctx.textAlign="center";ctx.fillText(m.type==="UP"?"▲":"▼",p.x,m.type==="UP"?y+18:y-8);ctx.textAlign="left";
   });
-  ctx.strokeStyle="rgba(255,255,255,.15)";ctx.beginPath();ctx.moveTo(left,dmiTop-12);ctx.lineTo(w-right,dmiTop-12);ctx.stroke();
-  ctx.fillStyle="#91a8b8";ctx.font="11px sans-serif";ctx.fillText("ADX • DI LENGTH 7 • ADX SMOOTHING 14",left,dmiTop-18);
-  const ds=(Array.isArray(state.dmi_series)?state.dmi_series:[]).slice(-70);if(ds.length>1){
-    const mx=Math.max(25,...ds.flatMap(x=>[+x.plus||0,+x.minus||0]));
-    const dx=(w-left-right)/(ds.length-1);
-    [["plus","#35d98a"],["minus","#ff5c70"]].forEach(([key,col])=>{
-      ctx.strokeStyle=col;ctx.lineWidth=key==="adx"?1.4:1.8;ctx.beginPath();
-      ds.forEach((v,i)=>{const x=left+i*dx,y=dmiBottom-(+v[key]||0)/mx*(dmiBottom-dmiTop);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();
-    });
-    ctx.fillStyle="#35d98a";ctx.fillText("+DI",left+34,dmiTop+2);ctx.fillStyle="#ff5c70";ctx.fillText("−DI",left+65,dmiTop+2);
-  }
+}
+function drawAdx(){
+  const w=adxCanvas.clientWidth,h=adxCanvas.clientHeight;
+  adxCtx.clearRect(0,0,w,h);adxCtx.fillStyle="#071018";adxCtx.fillRect(0,0,w,h);
+  const left=52,right=12,top=24,bottom=h-22;
+  adxCtx.fillStyle="#91a8b8";adxCtx.font="11px sans-serif";adxCtx.fillText("ADX • +DI / −DI • LENGTH 7 • SMOOTHING 14",left,14);
+  const ds=(Array.isArray(state.dmi_series)?state.dmi_series:[]).slice(-70);
+  if(ds.length<2){adxCtx.fillStyle="#718798";adxCtx.font="13px sans-serif";adxCtx.fillText("Waiting for ADX DI data…",left,45);return}
+  const mx=Math.max(25,...ds.flatMap(x=>[+x.plus||0,+x.minus||0]));
+  const dx=(w-left-right)/(ds.length-1);
+  for(let n=0;n<=4;n++){const y=bottom-n*(bottom-top)/4;adxCtx.strokeStyle="rgba(120,190,230,.12)";adxCtx.beginPath();adxCtx.moveTo(left,y);adxCtx.lineTo(w-right,y);adxCtx.stroke();adxCtx.fillStyle="#718798";adxCtx.font="9px sans-serif";adxCtx.fillText(String(Math.round(mx*n/4)),4,y+3)}
+  [["plus","#35d98a"],["minus","#ff5c70"]].forEach(([key,col])=>{
+    adxCtx.strokeStyle=col;adxCtx.lineWidth=2;adxCtx.beginPath();
+    ds.forEach((v,i)=>{const x=left+i*dx,y=bottom-(+v[key]||0)/mx*(bottom-top);i?adxCtx.lineTo(x,y):adxCtx.moveTo(x,y)});adxCtx.stroke();
+  });
+  const last=ds[ds.length-1],gap=Math.abs((+last.plus||0)-(+last.minus||0));
+  adxCtx.fillStyle="#35d98a";adxCtx.fillText("+DI "+Number(last.plus||0).toFixed(2),left+50, h-6);
+  adxCtx.fillStyle="#ff5c70";adxCtx.fillText("−DI "+Number(last.minus||0).toFixed(2),left+145,h-6);
+  adxCtx.fillStyle=gap>=5?"#ffd21c":"#91a8b8";adxCtx.fillText(gap>=5?"WIDE OVERLAP":"OVERLAP",w-105,h-6);
 }
 
 function clocks(){const now=new Date(),zones={local:Intl.DateTimeFormat().resolvedOptions().timeZone,ny:"America/New_York",london:"Europe/London",tokyo:"Asia/Tokyo"};Object.entries(zones).forEach(([id,z])=>{let e=document.getElementById("clock-"+id);if(e)e.textContent=new Intl.DateTimeFormat("en-US",{timeZone:z,hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(now)});let p=Number(state.period||60),r=p-(Math.floor(Date.now()/1000)%p),e=document.getElementById("countdown");if(e)e.textContent=String(Math.floor(r/60)).padStart(2,"0")+":"+String(r%60).padStart(2,"0")}
@@ -56,7 +64,7 @@ function updateFeed(s){
   state=s;candles=Array.isArray(s.candles)?s.candles:[];dmi=Array.isArray(s.dmi_series)?s.dmi_series:[];
   priceEl.textContent=s.price!=null?Number(s.price).toFixed(8):"—";feedStatus.textContent=s.feed_connected?"LIVE":"WAITING";
   if(s.asset)assetEl.value=s.asset;if(s.period)timeframeEl.value=s.period;
-  draw();
+  draw();drawAdx();
   const conf=Number(s.confidence||0), rawSignal=s.signal||"WAIT";
   const ok=rawSignal!=="WAIT"&&conf>=Number(threshold.value);
   signalEl.textContent=ok?rawSignal:"WAIT";signalEl.className="signal "+(ok?rawSignal.toLowerCase():"wait");
