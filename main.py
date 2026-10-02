@@ -430,13 +430,17 @@ def start_feed():
     threading.Thread(target=feed_supervisor, daemon=True, name="pocket-option-feed-supervisor").start()
 
 @app.get("/", response_class=HTMLResponse)
-async def home():
+async def home(request: Request):
     # Match Ichigo's TV-safe delivery pattern: serve the dashboard as one
     # server-rendered document with CSS and JavaScript inlined. This avoids
     # older Smart-TV browsers failing while loading separate static assets.
     html = (BASE / "static" / "index.html").read_text(encoding="utf-8")
     css = (BASE / "static" / "style.css").read_text(encoding="utf-8")
     js = (BASE / "static" / "app.js").read_text(encoding="utf-8")
+    ua=(request.headers.get("user-agent") or "").lower()
+    tv_server = ("tv" in ua or "smart-tv" in ua or "smarttv" in ua or "tizen" in ua or "webos" in ua or "hbbtv" in ua or "bravia" in ua or request.query_params.get("tv") == "1")
+    if tv_server:
+        html=html.replace("<html lang=\"en\">", '<html lang="en" class="sonic-tv-mode">')
     html = html.replace(
         '<link rel="stylesheet" href="/static/style.css?v=sonic4">',
         '<style>\\n' + css + '\\n</style>'
