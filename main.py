@@ -356,6 +356,7 @@ def feed_worker():
 
         # Fast polling keeps the dashboard responsive without changing the
         # selected candle timeframe.
+        visual_counter = 0
         while True:
             cycle_start = time.monotonic()
             try:
@@ -384,6 +385,8 @@ def feed_worker():
                     candles = sorted(merged.values(), key=lambda x: float(x["time"]))[-HISTORY:]
                     _update_engine(candles)
                     last_ts, last_price = normalized[-1]
+                    visual_counter += 1
+                    refresh_visuals = (visual_counter % 4 == 0)
                     with lock:
                         feed["feed_connected"] = True
                         feed["asset"] = selected_asset
@@ -392,18 +395,18 @@ def feed_worker():
                         feed["price"] = round(last_price, 5)
                         feed["timestamp"] = last_ts
                         feed["age"] = max(0.0, time.time() - last_ts)
-                        feed["candles"] = candles
-                        feed["dmi_series"] = _indicator_series(candles, 7, 14)[-120:]
-                        feed["fractal_marks"] = _fractal_marks(candles)[-40:]
+                        if refresh_visuals:
+                            feed["candles"] = candles
+                            feed["dmi_series"] = _indicator_series(candles, 7, 14)[-120:]
+                            feed["fractal_marks"] = _fractal_marks(candles)[-40:]
                         feed["error"] = None
             except Exception as exc:
                 with lock:
                     feed["error"] = str(exc)
 
-            # Target ~100 ms refresh when the client call is fast; never spin
-            # at 100% CPU if the provider is slower.
+            # Keep signal evaluation responsive while reducing expensive visual-series work.
             elapsed = time.monotonic() - cycle_start
-            time.sleep(max(0.05, 0.10 - elapsed))
+            time.sleep(max(0.10, 0.25 - elapsed))
 
     except Exception as exc:
         with lock:
