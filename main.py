@@ -133,9 +133,23 @@ def _fractal3(c):
     return None
 
 def _evaluate(c):
-    f=_fractal3(c); d=_adx(c,7,14)
-    if not f or not d:
-        return "WAIT",0,"Waiting for complete Fractal 3 + DMI setup",f,d
+    d=_adx(c,7,14)
+    if not d:
+        return "WAIT",0,"Waiting for ADX DI 7/14 data",None,d
+
+    # Use the most recent confirmed Fractal 3 so Sonic stays fast on 15s
+    # charts instead of waiting for a brand-new fractal on every candle.
+    f=None
+    start=len(c)-3
+    stop=max(2,len(c)-11)
+    for i in range(start,stop-1,-1):
+        h=c[i]["high"]; l=c[i]["low"]
+        if h>c[i-1]["high"] and h>c[i-2]["high"] and h>c[i+1]["high"] and h>c[i+2]["high"]:
+            f="DOWN"; break
+        if l<c[i-1]["low"] and l<c[i-2]["low"] and l<c[i+1]["low"] and l<c[i+2]["low"]:
+            f="UP"; break
+    if not f:
+        return "WAIT",0,"Waiting for confirmed Fractal 3",None,d
 
     # Sonic overlap rule:
     # - The Fractal arrow supplies the setup direction.
