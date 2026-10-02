@@ -175,4 +175,4 @@ function updateFeed(s){
   let di=document.getElementById("diValues");if(di)di.textContent="+DI "+(s.plus_di??"—")+" • −DI "+(s.minus_di??"—")+" • "+(s.wide_cross?"WIDE X":"OVERLAP");
 }
 async function pollState(){try{const r=await fetch("/api/state",{cache:"no-store"});if(r.ok)updateFeed(await r.json())}catch(e){feedStatus.textContent="WAITING"}}
-loadAssets().then(()=>pollState());setInterval(pollState,250);setInterval(clocks,250);pollState();clocks();
+loadAssets().then(()=>pollState());setInterval(pollState,1000);setInterval(clocks,250);pollState();clocks();
