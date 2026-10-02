@@ -165,8 +165,13 @@ def _evaluate(c):
 
     # Map the DI relationship into a confidence band. Small gaps stay valid
     # signals, while larger gaps receive materially more confidence.
-    conf=round(52.0 + min(46.0, gap*1.9 + overlap_ratio*18.0))
-    conf=min(98,max(52,conf))
+    # Matching Fractal + DI setups remain actionable at the default 80% threshold.
+    if wide:
+        conf=round(min(99.0, 94.0 + gap*0.45))
+    elif gap>=3:
+        conf=90
+    else:
+        conf=80
 
     if f=="UP" and d["minus"]>=d["plus"]:
         label="WIDE" if wide else ("MEDIUM" if gap>=3 else "SMALL")
