@@ -148,8 +148,22 @@ def _evaluate(c):
             f="DOWN"; break
         if l<c[i-1]["low"] and l<c[i-2]["low"] and l<c[i+1]["low"] and l<c[i+2]["low"]:
             f="UP"; break
+    # Fast ADX fallback: if a confirmed Fractal 3 is not available yet,
+    # do not let Sonic remain stuck on WAIT. The DI relationship itself can
+    # trigger a fast signal; a matching Fractal, when present, remains the
+    # preferred confirmation path.
     if not f:
-        return "WAIT",0,"Waiting for confirmed Fractal 3",None,d
+        gap=abs(d["plus"]-d["minus"])
+        wide=gap>=max(5.0,d["plus"]*.22,d["minus"]*.22)
+        if wide:
+            conf=round(min(99.0,94.0+gap*0.45))
+        elif gap>=3:
+            conf=90
+        else:
+            conf=80
+        if d["minus"]>=d["plus"]:
+            return "PUT",conf,"ADX DI overlap/dominance (−DI on top)",None,d
+        return "CALL",conf,"ADX DI overlap/dominance (+DI on top)",None,d
 
     # Sonic overlap rule:
     # - The Fractal arrow supplies the setup direction.
