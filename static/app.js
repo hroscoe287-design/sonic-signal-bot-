@@ -36,7 +36,7 @@ function draw(){
     const y=yPrice(Number(m.price));ctx.fillStyle=m.type==="UP"?"#35d98a":"#ff5c70";ctx.font="bold 14px sans-serif";ctx.textAlign="center";ctx.fillText(m.type==="UP"?"▲":"▼",p.x,m.type==="UP"?y+18:y-8);ctx.textAlign="left";
   });
   ctx.strokeStyle="rgba(255,255,255,.15)";ctx.beginPath();ctx.moveTo(left,dmiTop-12);ctx.lineTo(w-right,dmiTop-12);ctx.stroke();
-  ctx.fillStyle="#91a8b8";ctx.font="11px sans-serif";ctx.fillText("DMI • DI LENGTH 7 • ADX SMOOTHING 14",left,dmiTop-18);
+  ctx.fillStyle="#91a8b8";ctx.font="11px sans-serif";ctx.fillText("ADX • DI LENGTH 7 • ADX SMOOTHING 14",left,dmiTop-18);
   const ds=(Array.isArray(state.dmi_series)?state.dmi_series:[]).slice(-70);if(ds.length>1){
     const mx=Math.max(25,...ds.flatMap(x=>[+x.plus||0,+x.minus||0]));
     const dx=(w-left-right)/(ds.length-1);
