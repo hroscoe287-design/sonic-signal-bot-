@@ -4,6 +4,22 @@ let state={}, candles=[], dmi=[];
 let controlsInitialized=false;
 let applyingConfig=false;
 
+document.querySelectorAll(".tabs button").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    const label=btn.textContent.trim();
+    const targets={
+      Signals:".signal-grid",
+      Chart:".chart-card",
+      Performance:".rules",
+      Settings:".controls"
+    };
+    const target=document.querySelector(targets[label]);
+    if(target) target.scrollIntoView({behavior:"smooth",block:"start"});
+  });
+});
+
 threshold.addEventListener("input",()=>thresholdValue.textContent=threshold.value+"%");
 document.getElementById("apply").addEventListener("click",async()=>{
   applyingConfig=true;
@@ -22,7 +38,7 @@ document.getElementById("apply").addEventListener("click",async()=>{
   }finally{setTimeout(()=>{applyingConfig=false},500)}
 });
 
-function resize(){const d=devicePixelRatio||1,r=canvas.getBoundingClientRect(),ar=adxCanvas.getBoundingClientRect();canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);adxCanvas.width=ar.width*d;adxCanvas.height=ar.height*d;adxCtx.setTransform(d,0,0,d,0,0);draw();drawAdx()}
+function resize(){const d=devicePixelRatio||1,r=canvas.getBoundingClientRect(),ar=adxCanvas.getBoundingClientRect();canvas.width=Math.max(1,r.width*d);canvas.height=Math.max(1,r.height*d);ctx.setTransform(d,0,0,d,0,0);adxCanvas.width=Math.max(1,ar.width*d);adxCanvas.height=Math.max(1,ar.height*d);adxCtx.setTransform(d,0,0,d,0,0);draw();drawAdx()}
 window.addEventListener("resize",resize);resize();
 
 function draw(){
@@ -75,7 +91,9 @@ function clocks(){const now=new Date(),zones={local:Intl.DateTimeFormat().resolv
 async function loadAssets(){
   try{
     const d=await(await fetch("/api/assets",{cache:"no-store"})).json();
-    const previous=state.asset||assetEl.value;
+    const previousAsset=state.asset||assetEl.value;
+    const previousPeriod=Number(state.period||timeframeEl.value||60);
+
     assetEl.innerHTML="";
     const groups=d.asset_groups||{};
     const order=["Forex","Crypto","Indices","Commodities","Stocks","Other"];
@@ -92,22 +110,29 @@ async function loadAssets(){
       });
       assetEl.appendChild(group);
     });
-    // Backward-compatible fallback if an older API response is cached.
     if(!assetEl.options.length){
       (d.assets||[]).forEach(symbol=>{
         const o=document.createElement("option");
         o.value=symbol;o.textContent=symbol;assetEl.appendChild(o);
       });
     }
-    if(previous && [...assetEl.options].some(o=>o.value===previous)) assetEl.value=previous;
+    if(previousAsset && [...assetEl.options].some(o=>o.value===previousAsset)) assetEl.value=previousAsset;
+
     timeframeEl.innerHTML="";
-    d.timeframes.forEach(x=>{
+    (d.timeframes||[]).forEach(x=>{
       const o=document.createElement("option");
-      o.value=x;o.textContent=x<60?x+"s":x/60+"m";
+      o.value=String(x);
+      o.textContent=x<60?x+"s":(x%60===0?x/60+"m":x+"s");
       timeframeEl.appendChild(o);
     });
+    if([...timeframeEl.options].some(o=>Number(o.value)===previousPeriod)){
+      timeframeEl.value=String(previousPeriod);
+    }
+    assetEl.disabled=false;
+    timeframeEl.disabled=false;
   }catch(e){
     console.error("Asset catalog load failed",e);
+    reasonEl.textContent="Unable to load live asset/timeframe menu";
   }
 }
 
