@@ -6,6 +6,8 @@ var signalEl=document.getElementById("signal"),reasonEl=document.getElementById(
 var threshold=document.getElementById("threshold"),thresholdValue=document.getElementById("thresholdValue"),priceEl=document.getElementById("price"),feedStatus=document.getElementById("feedStatus");
 var assetEl=document.getElementById("asset"),timeframeEl=document.getElementById("timeframe"),selectedAssetEl=document.getElementById("selectedAsset"),selectedTimeframeEl=document.getElementById("selectedTimeframe");
 var state={},candles=[],applyingConfig=false,pendingAsset=null,pendingTimeframe=null;
+var isTV=/Android TV|GoogleTV|SMART-TV|SmartTV|Tizen|Web0S|WebOS|HbbTV|NetCast|Viera|BRAVIA|AFT\b|TV\b/i.test(navigator.userAgent||"");
+var pollUrl=isTV?"/api/state?display=tv":"/api/state";
 
 function $(id){return document.getElementById(id);}
 function xhr(url,method,data,done){
@@ -49,14 +51,16 @@ function bind(){
   };
 }
 function resize(){
-  var d=window.devicePixelRatio||1,r=canvas.getBoundingClientRect();canvas.width=Math.max(1,Math.floor(r.width*d));canvas.height=Math.max(1,Math.floor(r.height*d));ctx.setTransform(d,0,0,d,0,0);
-  if(adxCanvas&&adxCtx){var ar=adxCanvas.getBoundingClientRect();adxCanvas.width=Math.max(1,Math.floor(ar.width*d));adxCanvas.height=Math.max(1,Math.floor(ar.height*d));adxCtx.setTransform(d,0,0,d,0,0);}
+  var d=isTV?1:Math.min(2,window.devicePixelRatio||1),r=canvas.getBoundingClientRect();
+  var cw=Math.min(1280,Math.max(1,Math.floor(r.width*d))),ch=Math.min(420,Math.max(1,Math.floor(r.height*d)));
+  canvas.width=cw;canvas.height=ch;ctx.setTransform(cw/r.width,0,0,ch/r.height,0,0);
+  if(adxCanvas&&adxCtx){var ar=adxCanvas.getBoundingClientRect(),aw=Math.min(1280,Math.max(1,Math.floor(ar.width*d))),ah=Math.min(260,Math.max(1,Math.floor(ar.height*d)));adxCanvas.width=aw;adxCanvas.height=ah;adxCtx.setTransform(aw/ar.width,0,0,ah/ar.height,0,0);}
   draw();drawAdx();
 }
 function draw(){
   var w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);ctx.fillStyle="#071018";ctx.fillRect(0,0,w,h);
   if(candles.length<2){ctx.fillStyle="#8ca5b8";ctx.font="14px sans-serif";ctx.fillText("Waiting for live candles...",18,30);return;}
-  var left=52,right=12,top=14,bottom=h-14,view=candles.slice(Math.max(0,candles.length-70)),hi=-Infinity,lo=Infinity,i,c;
+  var left=52,right=12,top=14,bottom=h-14,view=candles.slice(Math.max(0,candles.length-(isTV?45:70))),hi=-Infinity,lo=Infinity,i,c;
   for(i=0;i<view.length;i++){c=view[i];hi=Math.max(hi,Number(c.high));lo=Math.min(lo,Number(c.low));}
   var range=hi-lo||0.0001,step=(w-left-right)/view.length;
   function yp(p){return top+(hi-p)/range*(bottom-top-8);}
@@ -68,7 +72,7 @@ function drawAdx(){
   if(!adxCanvas||!adxCtx)return;
   var w=adxCanvas.clientWidth,h=adxCanvas.clientHeight;adxCtx.clearRect(0,0,w,h);adxCtx.fillStyle="#071018";adxCtx.fillRect(0,0,w,h);
   var left=52,right=12,top=24,bottom=h-22;adxCtx.fillStyle="#91a8b8";adxCtx.font="11px sans-serif";adxCtx.fillText("ADX +DI / -DI  LENGTH 7  SMOOTHING 14",left,14);
-  var ds=Array.isArray(state.dmi_series)?state.dmi_series.slice(Math.max(0,state.dmi_series.length-70)):[];if(ds.length<2){adxCtx.fillStyle="#718798";adxCtx.font="13px sans-serif";adxCtx.fillText("Waiting for ADX DI data...",left,45);return;}
+  var ds=Array.isArray(state.dmi_series)?state.dmi_series.slice(Math.max(0,state.dmi_series.length-(isTV?45:70))):[];if(ds.length<2){adxCtx.fillStyle="#718798";adxCtx.font="13px sans-serif";adxCtx.fillText("Waiting for ADX DI data...",left,45);return;}
   var mx=25,i,v;for(i=0;i<ds.length;i++){v=ds[i];mx=Math.max(mx,Number(v.plus)||0,Number(v.minus)||0);}var dx=(w-left-right)/(ds.length-1);
   for(i=0;i<=4;i++){var y=bottom-i*(bottom-top)/4;adxCtx.strokeStyle="rgba(120,190,230,.12)";adxCtx.beginPath();adxCtx.moveTo(left,y);adxCtx.lineTo(w-right,y);adxCtx.stroke();adxCtx.fillStyle="#718798";adxCtx.font="9px sans-serif";adxCtx.fillText(String(Math.round(mx*i/4)),4,y+3);}
   drawLine("plus","#35d98a");drawLine("minus","#ff5c70");
@@ -105,7 +109,7 @@ function updateFeed(s){
   var ps=Number(state.plus_strength||0),ms=Number(state.minus_strength||0);$("plusSquares").textContent="■■■■■".slice(0,ps)+"□□□□□".slice(0,5-ps);$("minusSquares").textContent="■■■■■".slice(0,ms)+"□□□□□".slice(0,5-ms);
   var di=$("diValues");if(di)di.textContent="+DI "+(state.plus_di==null?"—":state.plus_di)+" • -DI "+(state.minus_di==null?"—":state.minus_di)+" • "+(state.wide_cross?"WIDE X":"OVERLAP");
 }
-function poll(){xhr("/api/state","GET",null,function(err,s){if(!err&&s)updateFeed(s);else feedStatus.textContent="WAITING";});}
-function start(){bind();resize();loadAssets(function(){poll();});poll();clocks();setInterval(poll,1000);setInterval(clocks,1000);window.onresize=resize;}
+function poll(){xhr(pollUrl,"GET",null,function(err,s){if(!err&&s)updateFeed(s);else feedStatus.textContent="WAITING";});}
+function start(){bind();resize();loadAssets(function(){poll();});poll();clocks();setInterval(poll,isTV?2000:1000);setInterval(clocks,1000);window.onresize=resize;if(isTV){document.documentElement.className+=" sonic-tv-mode";}}
 if(document.readyState==="loading")window.onload=start;else start();
 })();
