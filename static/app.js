@@ -172,7 +172,7 @@ function updateFeed(s){
   reasonEl.textContent=ok?s.reason:(rawSignal!=="WAIT"?"Signal below threshold: "+conf+"% • "+s.reason:(s.reason||"Waiting"));
   document.getElementById("plusSquares").textContent="■".repeat(Number(s.plus_strength||0))+"□".repeat(5-Number(s.plus_strength||0));
   document.getElementById("minusSquares").textContent="■".repeat(Number(s.minus_strength||0))+"□".repeat(5-Number(s.minus_strength||0));
-  let di=document.getElementById("diValues");if(di)di.textContent="+DI "+(s.plus_di??"—")+" • −DI "+(s.minus_di??"—")+" • "+(s.wide_cross?"WIDE X":"OVERLAP");
+  let di=document.getElementById("diValues");if(di)di.textContent="+DI "+(s.plus_di==null?"—":s.plus_di)+" • −DI "+(s.minus_di==null?"—":s.minus_di)+" • "+(s.wide_cross?"WIDE X":"OVERLAP");
 }
 async function pollState(){try{const r=await fetch("/api/state",{cache:"no-store"});if(r.ok)updateFeed(await r.json())}catch(e){feedStatus.textContent="WAITING"}}
 loadAssets().then(()=>pollState());setInterval(pollState,1000);setInterval(clocks,250);pollState();clocks();
