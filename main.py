@@ -45,7 +45,7 @@ feed = {
     "asset_count": 0,
     "engine": "FRACTAL_3 + DMI_PLUS_MINUS",
     "signal": "WAIT", "confidence": 0, "reason": "Waiting for qualifying setup",
-    "fractal": None, "plus_di": None, "minus_di": None, "plus_strength": 0, "minus_strength": 0, "wide_cross": False,
+    "fractal": None, "plus_di": None, "minus_di": None, "plus_strength": 0, "minus_strength": 0, "wide_cross": False,\n    "dmi_series": [], "fractal_marks": [],
 }
 
 def parse_auth(raw):
@@ -160,6 +160,26 @@ def _evaluate(c):
 
     return "WAIT",0,"Fractal and DI direction are conflicting",f,d
 
+def _indicator_series(candles, n=7):
+    rows=[]
+    if len(candles)<n+3: return rows
+    for i in range(4, len(candles)+1):
+        d=_dmi(candles[:i], n)
+        if d:
+            rows.append({"time":candles[i-1]["time"],"plus":round(d["plus"],2),"minus":round(d["minus"],2)})
+    return rows
+
+def _fractal_marks(candles):
+    marks=[]
+    if len(candles)<5: return marks
+    for i in range(2,len(candles)-2):
+        h=candles[i]["high"]; l=candles[i]["low"]
+        if h>candles[i-1]["high"] and h>candles[i-2]["high"] and h>candles[i+1]["high"] and h>candles[i+2]["high"]:
+            marks.append({"time":candles[i]["time"],"type":"DOWN","price":h})
+        elif l<candles[i-1]["low"] and l<candles[i-2]["low"] and l<candles[i+1]["low"] and l<candles[i+2]["low"]:
+            marks.append({"time":candles[i]["time"],"type":"UP","price":l})
+    return marks
+
 def _update_engine(candles):
     s,conf,reason,f,d=_evaluate(candles)
     with lock:
@@ -172,7 +192,7 @@ def _update_engine(candles):
             feed["wide_cross"]=abs(d["plus"]-d["minus"])>=max(5,d["plus"]*.22,d["minus"]*.22)
 
 def feed_worker():
-    global client
+    global client, selected_asset, selected_period
     auth = parse_auth(PO_AUTH_JSON)
     if not auth:
         with lock:
@@ -231,6 +251,8 @@ def feed_worker():
                         feed["timestamp"] = last_ts
                         feed["age"] = max(0.0, time.time() - last_ts)
                         feed["candles"] = candles
+                        feed["dmi_series"] = _indicator_series(candles, 7)[-120:]
+                        feed["fractal_marks"] = _fractal_marks(candles)[-40:]
                         feed["error"] = None
             except Exception as exc:
                 with lock:
@@ -261,7 +283,34 @@ async def state():
         snapshot["candles"] = list(feed["candles"])
     return snapshot
 
-@app.get("/api/assets")\nasync def assets():\n    return {"assets": list(ASSETS), "timeframes": TIMEFRAMES, "live_catalog": bool(ASSETS), "count": len(ASSETS)}\n\nclass Config(BaseModel):\n    asset: str\n    timeframe: int\n\n@app.post("/api/config")\nasync def config(body: Config):\n    global selected_asset, selected_period\n    if body.asset not in ASSETS or body.timeframe not in TIMEFRAMES:\n        return {"ok": False, "error": "Unsupported asset or timeframe"}\n    with lock:\n        selected_asset, selected_period = body.asset, body.timeframe\n        feed["asset"], feed["timeframe"] = body.asset, f"{body.timeframe}s"\n        feed["signal"], feed["confidence"] = "WAIT", 0\n        feed["reason"] = "Switching live market feed..."\n    return {"ok": True}\n\n@app.get("/api/health")
+@app.get("/api/assets")
+async def assets():
+    return {"assets": list(ASSETS), "timeframes": TIMEFRAMES, "live_catalog": bool(ASSETS), "count": len(ASSETS)}
+
+class Config(BaseModel):
+    asset: str
+    timeframe: int
+
+@app.post("/api/config")
+async def config(body: Config):
+    global selected_asset, selected_period
+    if body.asset not in ASSETS or body.timeframe not in TIMEFRAMES:
+        return {"ok": False, "error": "Unsupported asset or timeframe"}
+    with lock:
+        selected_asset, selected_period = body.asset, body.timeframe
+        feed["asset"], feed["timeframe"], feed["period"] = body.asset, f"{body.timeframe}s", body.timeframe
+        feed["signal"], feed["confidence"] = "WAIT", 0
+        feed["reason"] = "Switching live market feed..."
+        feed["candles"], feed["dmi_series"], feed["fractal_marks"] = [], [], []
+    try:
+        if client:
+            client.subscribe(selected_asset, period=selected_period)
+    except Exception as exc:
+        with lock:
+            feed["error"] = f"Subscription switch: {exc}"
+    return {"ok": True}
+
+@app.get("/api/health")
 async def health():
     with lock:
         return {
