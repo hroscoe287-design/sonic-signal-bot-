@@ -130,15 +130,35 @@ def _fractal3(c):
 
 def _evaluate(c):
     f=_fractal3(c); d=_dmi(c)
-    if not f or not d:return "WAIT",0,"Waiting for complete Fractal 3 + DMI setup",f,d
-    gap=abs(d["plus"]-d["minus"]); wide=gap>=max(5,d["plus"]*.22,d["minus"]*.22)
-    if f=="UP" and d["minus"]>d["plus"] and d["minus"]>d["minus_prev"]:
-        conf=min(99,max(50,round(50+min(49,gap*2.2+max(0,d["minus"]-10)*.25))))
-        return "PUT",conf,"Fractal UP + rising −DI above +DI"+(" + WIDE X" if wide else " + TIGHT X"),f,d
-    if f=="DOWN" and d["plus"]>d["minus"] and d["plus"]>d["plus_prev"]:
-        conf=min(99,max(50,round(50+min(49,gap*2.2+max(0,d["plus"]-10)*.25))))
-        return "CALL",conf,"Fractal DOWN + rising +DI above −DI"+(" + WIDE X" if wide else " + TIGHT X"),f,d
-    return "WAIT",0,"Fractal and DMI are not aligned",f,d
+    if not f or not d:
+        return "WAIT",0,"Waiting for complete Fractal 3 + DMI setup",f,d
+
+    # Sonic overlap rule:
+    # - The Fractal arrow supplies the setup direction.
+    # - The DI line on top supplies the directional confirmation.
+    # - Do NOT require the winning DI to be rising; this lets small overlaps
+    #   produce signals instead of being forced into WAIT.
+    # - Confidence scales with DI separation: tight/small overlap = lower
+    #   confidence, wide separation = higher confidence.
+    gap=abs(d["plus"]-d["minus"])
+    baseline=max(1.0,min(100.0,(abs(d["plus"])+abs(d["minus"]))/2.0))
+    overlap_ratio=gap/max(1.0,baseline)
+    wide=gap>=max(5.0,d["plus"]*.22,d["minus"]*.22)
+
+    # Map the DI relationship into a confidence band. Small gaps stay valid
+    # signals, while larger gaps receive materially more confidence.
+    conf=round(52.0 + min(46.0, gap*1.9 + overlap_ratio*18.0))
+    conf=min(98,max(52,conf))
+
+    if f=="UP" and d["minus"]>=d["plus"]:
+        label="WIDE" if wide else ("MEDIUM" if gap>=3 else "SMALL")
+        return "PUT",conf,f"Fractal UP + −DI on top ({label} overlap)",f,d
+
+    if f=="DOWN" and d["plus"]>=d["minus"]:
+        label="WIDE" if wide else ("MEDIUM" if gap>=3 else "SMALL")
+        return "CALL",conf,f"Fractal DOWN + +DI on top ({label} overlap)",f,d
+
+    return "WAIT",0,"Fractal and DI direction are conflicting",f,d
 
 def _update_engine(candles):
     s,conf,reason,f,d=_evaluate(candles)
