@@ -362,9 +362,41 @@ async def state():
         snapshot["candles"] = list(feed["candles"])
     return snapshot
 
+def _asset_category(symbol):
+    s = str(symbol).upper().replace("/", "").replace("-", "").replace("_OTC", "")
+    # Pocket Option names vary by feed; classify common symbols while
+    # keeping the live catalog intact.
+    crypto_keys = ("BTC", "ETH", "SOL", "XRP", "DOGE", "LTC", "ADA", "BNB", "TRX", "DOT", "AVAX", "MATIC", "USDT")
+    index_keys = ("SP500", "SPX", "US500", "US100", "NAS100", "NASDAQ", "DJI", "DJ30", "DOW", "GER40", "DAX", "UK100", "FTSE", "FRA40", "CAC", "JP225", "NIKKEI", "HK50", "HSI", "AUS200", "ASX")
+    commodity_keys = ("GOLD", "XAU", "SILVER", "XAG", "BRENT", "WTI", "CRUDE", "OIL", "NATURALGAS", "COPPER")
+    stock_keys = ("APPLE", "TESLA", "AMAZON", "MICROSOFT", "GOOGLE", "ALPHABET", "META", "NVIDIA", "NVDA", "AMD", "NETFLIX", "INTEL", "COINBASE")
+    if any(k in s for k in crypto_keys):
+        return "Crypto"
+    if any(k in s for k in index_keys):
+        return "Indices"
+    if any(k in s for k in commodity_keys):
+        return "Commodities"
+    if any(k in s for k in stock_keys):
+        return "Stocks"
+    # Standard FX symbols are six letters (e.g. EURUSD, AUDCAD).
+    if len(s) == 6 and s.isalpha():
+        return "Forex"
+    if s.endswith("OTC") and len(s) >= 6:
+        return "Other"
+    return "Other"
+
 @app.get("/api/assets")
 async def assets():
-    return {"assets": list(ASSETS), "timeframes": TIMEFRAMES, "live_catalog": bool(ASSETS), "count": len(ASSETS)}
+    groups = {"Forex": [], "Crypto": [], "Indices": [], "Commodities": [], "Stocks": [], "Other": []}
+    for symbol in sorted(set(ASSETS), key=str.upper):
+        groups[_asset_category(symbol)].append(symbol)
+    return {
+        "assets": list(ASSETS),
+        "asset_groups": groups,
+        "timeframes": TIMEFRAMES,
+        "live_catalog": bool(ASSETS),
+        "count": len(ASSETS)
+    }
 
 class Config(BaseModel):
     asset: str
