@@ -355,11 +355,35 @@ def feed_worker():
             feed["error"] = None
 
         # Fast polling keeps the dashboard responsive without changing the
-        # selected candle timeframe.
+        # selected candle timeframe. Selection changes are handled here, inside
+        # the feed worker, because the Pocket Option client owns the WebSocket
+        # loop. This also reseeds candles + ADX/DI immediately for every TF.
         visual_counter = 0
+        worker_asset = selected_asset
+        worker_period = selected_period
         while True:
             cycle_start = time.monotonic()
             try:
+                # Apply a changed asset/timeframe on the feed thread, then seed
+                # the new timeframe before publishing the new live state.
+                if selected_asset != worker_asset or selected_period != worker_period:
+                    worker_asset, worker_period = selected_asset, selected_period
+                    subscribed, sub_error = _subscribe_stream(worker_asset, worker_period)
+                    with lock:
+                        feed["asset"] = worker_asset
+                        feed["period"] = worker_period
+                        feed["timeframe"] = f"{worker_period}s"
+                        feed["signal"] = "WAIT"
+                        feed["confidence"] = 0
+                        feed["reason"] = "Loading live market data..."
+                        feed["error"] = sub_error if not subscribed else None
+                    if subscribed:
+                        _seed_dashboard(worker_asset, worker_period)
+                        with lock:
+                            feed["feed_connected"] = True
+                            feed["error"] = None
+                    # Start the new stream with its freshly seeded data.
+                    continue
                 ticks = client.get_realtime_ticks(
                     selected_asset,
                     limit=max(250, min(1000, HISTORY * max(1, selected_period // 2)))
@@ -531,19 +555,10 @@ async def config(body: Config):
         selected_asset, selected_period = body.asset, body.timeframe
         feed["asset"], feed["timeframe"], feed["period"] = body.asset, f"{body.timeframe}s", body.timeframe
         feed["signal"], feed["confidence"] = "WAIT", 0
-        feed["reason"] = "Switching live market feed..."
-        feed["candles"], feed["dmi_series"], feed["fractal_marks"] = [], [], []
-    try:
-        if client:
-            ok, err = _subscribe_stream(selected_asset, selected_period)
-            if not ok:
-                with lock:
-                    feed["error"] = f"Subscription switch: {err}"
-            # History seeding is intentionally handled by the feed worker thread.
-            # The Pocket Option client owns its WebSocket event loop.
-    except Exception as exc:
-        with lock:
-            feed["error"] = f"Subscription switch: {exc}"
+        feed["reason"] = "Loading live market data..."
+        # Do NOT blank the chart here. The feed worker will replace it with a
+        # freshly seeded history for the selected timeframe. Keeping the old
+        # pixels during the handoff prevents the UI from flashing an empty chart.
     return {"ok": True}
 
 @app.get("/api/health")
