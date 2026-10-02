@@ -40,11 +40,11 @@ function draw(){
   const ds=(Array.isArray(state.dmi_series)?state.dmi_series:[]).slice(-70);if(ds.length>1){
     const mx=Math.max(25,...ds.flatMap(x=>[+x.plus||0,+x.minus||0]));
     const dx=(w-left-right)/(ds.length-1);
-    [["plus","#35d98a"],["minus","#ff5c70"]].forEach(([key,col])=>{
-      ctx.strokeStyle=col;ctx.lineWidth=1.8;ctx.beginPath();
+    [["plus","#35d98a"],["minus","#ff5c70"],["adx","#ffd166"]].forEach(([key,col])=>{
+      ctx.strokeStyle=col;ctx.lineWidth=key==="adx"?1.4:1.8;ctx.beginPath();
       ds.forEach((v,i)=>{const x=left+i*dx,y=dmiBottom-(+v[key]||0)/mx*(dmiBottom-dmiTop);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();
     });
-    ctx.fillStyle="#35d98a";ctx.fillText("+DI",left+34,dmiTop+2);ctx.fillStyle="#ff5c70";ctx.fillText("−DI",left+65,dmiTop+2);
+    ctx.fillStyle="#35d98a";ctx.fillText("+DI",left+34,dmiTop+2);ctx.fillStyle="#ff5c70";ctx.fillText("−DI",left+65,dmiTop+2);ctx.fillStyle="#ffd166";ctx.fillText("ADX 14",left+96,dmiTop+2);
   }
 }
 
