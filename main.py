@@ -85,10 +85,10 @@ def normalize_tick(item):
         return float(item[0]), float(item[1])
     return None, None
 
-def build_candles(ticks):
+def build_candles(ticks, period):
     buckets = {}
     for ts, price in ticks:
-        bucket = int(ts // PERIOD) * PERIOD
+        bucket = int(ts // period) * period
         if bucket not in buckets:
             buckets[bucket] = {"time": bucket, "open": price, "high": price, "low": price, "close": price}
         else:
@@ -255,7 +255,7 @@ def feed_worker():
             try:
                 ticks = client.get_realtime_ticks(
                     selected_asset,
-                    limit=max(250, min(1000, HISTORY * max(1, PERIOD // 2)))
+                    limit=max(250, min(1000, HISTORY * max(1, selected_period // 2)))
                 )
                 normalized = []
                 for item in ticks or []:
@@ -265,7 +265,7 @@ def feed_worker():
 
                 if normalized:
                     normalized.sort(key=lambda x: x[0])
-                    candles = build_candles(normalized)
+                    candles = build_candles(normalized, selected_period)
                     _update_engine(candles)
                     last_ts, last_price = normalized[-1]
                     with lock:
