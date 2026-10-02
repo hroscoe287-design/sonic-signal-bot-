@@ -19,6 +19,8 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 ASSET = os.getenv("SONIC_ASSET", "EURUSD_otc")
 PERIOD = int(os.getenv("SONIC_TIMEFRAME_SECONDS", "60"))
+TIMEFRAMES = [5,10,15,30,60,120,180,300,600,900,1800,3600]
+ASSETS = """EURUSD_otc AUDCHF_otc AUDUSD_otc CADCHF_otc CADJPY_otc EURCHF_otc GBPJPY_otc GBPUSD_otc USD/CAD_otc USDCHF_otc USDJPY_otc EURTRY_otc USDINR_otc USDPHP_otc USDBDT_otc BHDCNY_otc SARCNY_otc QARCNY_otc OMRCNY_otc NGNUSD_otc ZARUSD_otc UAHUSD_otc EURHUF_otc GBPAUD_otc AUDCAD_otc EURNZD_otc EURRUB_otc AUDJPY_otc USDARS_otc USDMYR_otc USDBRL_otc CHFJPY_otc TNDUSD_otc USDTHB_otc MADUSD_otc USDCLP_otc USDPKR_otc LBPUSD_otc USDVND_otc YERUSD_otc EURJPY_otc USDCNH_otc NZDJPY_otc JODCNY_otc AUDNZD_otc USDRUB_otc USDMXN_otc USDSGD_otc USDIDR_otc AEDCNY_otc Gold_otc BrentOil_otc WTICrudeOil_otc Silver_otc NaturalGas_otc PlatinumSpot_otc PalladiumSpot_otc Microsoft_otc FACEBOOKINC_otc JohnsonJohnson_otc AdvancedMicroDevices_otc CoinbaseGlobal_otc Intel_otc ExxonMobil_otc VIX_otc GameStopCorp_otc PfizerInc_otc Cisco_otc MarathonDigitalHoldings_otc Alibaba_otc Netflix_otc FedEx_otc Apple_otc AmericanExpress_otc Amazon_otc Tesla_otc CitigroupInc_otc BoeingCompany_otc McDonalds_otc VISA_otc PalantirTechnologies_otc Solana_otc Bitcoin_otc Dogecoin_otc Avalanche_otc Litecoin_otc TRON_otc Cardano_otc BitcoinETF_otc Toncoin_otc Ethereum_otc Polkadot_otc Chainlink_otc BNB_otc Polygon_otc AUS200_otc E35EUR_otc 100GBP_otc F40EUR_otc JPN225_otc D30EUR_otc E50EUR_otc SP500_otc DJI30_otc US100_otc EUR/USD AUD/USD AUD/CHF CAD/JPY CAD/CHF GBP/AUD GBP/JPY GBP/USD USD/CAD USD/CHF USD/JPY EUR/CHF EUR/JPY AUD/CAD AUD/JPY AUD/NZD EUR/GBP GBP/CHF GBP/CAD USD/SGD""".split()
 HISTORY = int(os.getenv("SONIC_HISTORY", "300"))
 
 PO_AUTH_JSON = os.getenv("PO_AUTH_JSON", "").strip()
@@ -36,6 +38,8 @@ feed = {
     "candles": [],
     "error": None,
     "engine": "FRACTAL_3 + DMI_PLUS_MINUS",
+    "signal": "WAIT", "confidence": 0, "reason": "Waiting for qualifying setup",
+    "fractal": None, "plus_di": None, "minus_di": None, "plus_strength": 0, "minus_strength": 0, "wide_cross": False,
 }
 
 def parse_auth(raw):
@@ -87,6 +91,60 @@ def build_candles(ticks):
             c["close"] = price
     return [buckets[k] for k in sorted(buckets)][-HISTORY:]
 
+
+
+def _wilder(vals, n):
+    if len(vals) < n: return []
+    out=[sum(vals[:n])/n]; prev=out[0]
+    for v in vals[n:]:
+        prev=((prev*(n-1))+v)/n; out.append(prev)
+    return out
+
+def _dmi(candles, n=7):
+    if len(candles)<n+3: return None
+    h=[c["high"] for c in candles]; l=[c["low"] for c in candles]; cl=[c["close"] for c in candles]
+    tr=[]; plus=[]; minus=[]
+    for j in range(1,len(candles)):
+        up=h[j]-h[j-1]; down=l[j-1]-l[j]
+        plus.append(up if up>down and up>0 else 0); minus.append(down if down>up and down>0 else 0)
+        tr.append(max(h[j]-l[j],abs(h[j]-cl[j-1]),abs(l[j]-cl[j-1])))
+    atr=_wilder(tr,n); ps=_wilder(plus,n); ms=_wilder(minus,n)
+    q=min(len(atr),len(ps),len(ms))
+    if q<3:return None
+    p=[ps[j]/atr[j]*100 if atr[j] else 0 for j in range(q)]
+    mn=[ms[j]/atr[j]*100 if atr[j] else 0 for j in range(q)]
+    return {"plus":p[-1],"minus":mn[-1],"plus_prev":p[-2],"minus_prev":mn[-2]}
+
+def _fractal3(c):
+    if len(c)<5:return None
+    h=[x["high"] for x in c]; l=[x["low"] for x in c]; j=len(c)-3
+    if h[j]>h[j-1] and h[j]>h[j-2] and h[j]>h[j+1] and h[j]>h[j+2]: return "DOWN"
+    if l[j]<l[j-1] and l[j]<l[j-2] and l[j]<l[j+1] and l[j]<l[j+2]: return "UP"
+    return None
+
+def _evaluate(c):
+    f=_fractal3(c); d=_dmi(c)
+    if not f or not d:return "WAIT",0,"Waiting for complete Fractal 3 + DMI setup",f,d
+    gap=abs(d["plus"]-d["minus"]); wide=gap>=max(5,d["plus"]*.22,d["minus"]*.22)
+    if f=="UP" and d["minus"]>d["plus"] and d["minus"]>d["minus_prev"]:
+        conf=min(99,max(50,round(50+min(49,gap*2.2+max(0,d["minus"]-10)*.25))))
+        return "PUT",conf,"Fractal UP + rising −DI above +DI"+(" + WIDE X" if wide else " + TIGHT X"),f,d
+    if f=="DOWN" and d["plus"]>d["minus"] and d["plus"]>d["plus_prev"]:
+        conf=min(99,max(50,round(50+min(49,gap*2.2+max(0,d["plus"]-10)*.25))))
+        return "CALL",conf,"Fractal DOWN + rising +DI above −DI"+(" + WIDE X" if wide else " + TIGHT X"),f,d
+    return "WAIT",0,"Fractal and DMI are not aligned",f,d
+
+def _update_engine(candles):
+    s,conf,reason,f,d=_evaluate(candles)
+    with lock:
+        feed["signal"],feed["confidence"],feed["reason"]=s,conf,reason
+        feed["fractal"]=f
+        if d:
+            feed["plus_di"],feed["minus_di"]=round(d["plus"],2),round(d["minus"],2)
+            feed["plus_strength"]=min(5,max(0,round(d["plus"]/10)))
+            feed["minus_strength"]=min(5,max(0,round(d["minus"]/10)))
+            feed["wide_cross"]=abs(d["plus"]-d["minus"])>=max(5,d["plus"]*.22,d["minus"]*.22)
+
 def feed_worker():
     global client
     auth = parse_auth(PO_AUTH_JSON)
@@ -107,7 +165,7 @@ def feed_worker():
                 feed["error"] = str(err or "Pocket Option connection failed")
             return
 
-        client.subscribe(ASSET, period=PERIOD)
+        client.subscribe(selected_asset, period=selected_period)
         with lock:
             feed["feed_connected"] = True
             feed["mode"] = "POCKET_OPTION"
@@ -131,7 +189,7 @@ def feed_worker():
                 if normalized:
                     normalized.sort(key=lambda x: x[0])
                     candles = build_candles(normalized)
-                    last_ts, last_price = normalized[-1]
+                    _update_engine(candles)\n                    last_ts, last_price = normalized[-1]
                     with lock:
                         feed["feed_connected"] = True
                         feed["price"] = round(last_price, 5)
@@ -168,7 +226,7 @@ async def state():
         snapshot["candles"] = list(feed["candles"])
     return snapshot
 
-@app.get("/api/health")
+@app.get("/api/assets")\nasync def assets():\n    return {"assets": ASSETS, "timeframes": TIMEFRAMES}\n\nclass Config(BaseModel):\n    asset: str\n    timeframe: int\n\n@app.post("/api/config")\nasync def config(body: Config):\n    global selected_asset, selected_period\n    if body.asset not in ASSETS or body.timeframe not in TIMEFRAMES:\n        return {"ok": False, "error": "Unsupported asset or timeframe"}\n    with lock:\n        selected_asset, selected_period = body.asset, body.timeframe\n        feed["asset"], feed["timeframe"] = body.asset, f"{body.timeframe}s"\n        feed["signal"], feed["confidence"] = "WAIT", 0\n        feed["reason"] = "Switching live market feed..."\n    return {"ok": True}\n\n@app.get("/api/health")
 async def health():
     with lock:
         return {
