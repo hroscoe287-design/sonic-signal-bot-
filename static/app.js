@@ -1,11 +1,25 @@
 const canvas=document.getElementById("chart"),ctx=canvas.getContext("2d"),adxCanvas=document.getElementById("adxChart"),adxCtx=adxCanvas.getContext("2d");
 const signalEl=document.getElementById("signal"),reasonEl=document.getElementById("reason"),confidenceEl=document.getElementById("confidence"),meter=document.getElementById("meter"),threshold=document.getElementById("threshold"),thresholdValue=document.getElementById("thresholdValue"),priceEl=document.getElementById("price"),feedStatus=document.getElementById("feedStatus"),assetEl=document.getElementById("asset"),timeframeEl=document.getElementById("timeframe");
 let state={}, candles=[], dmi=[];
+let controlsInitialized=false;
+let applyingConfig=false;
 
 threshold.addEventListener("input",()=>thresholdValue.textContent=threshold.value+"%");
 document.getElementById("apply").addEventListener("click",async()=>{
-  await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({asset:assetEl.value,timeframe:Number(timeframeEl.value)})});
-  await pollState();
+  applyingConfig=true;
+  const asset=assetEl.value;
+  const timeframe=Number(timeframeEl.value);
+  try{
+    const r=await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({asset,timeframe})});
+    const result=await r.json();
+    if(result.ok){
+      state.asset=asset; state.period=timeframe; state.timeframe=timeframe+"s";
+      feedStatus.textContent="SWITCHING";
+    }else{
+      reasonEl.textContent=result.error||"Unable to change timeframe";
+    }
+    await pollState();
+  }finally{setTimeout(()=>{applyingConfig=false},500)}
 });
 
 function resize(){const d=devicePixelRatio||1,r=canvas.getBoundingClientRect(),ar=adxCanvas.getBoundingClientRect();canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);adxCanvas.width=ar.width*d;adxCanvas.height=ar.height*d;adxCtx.setTransform(d,0,0,d,0,0);draw();drawAdx()}
@@ -63,7 +77,11 @@ async function loadAssets(){try{let d=await(await fetch("/api/assets",{cache:"no
 function updateFeed(s){
   state=s;candles=Array.isArray(s.candles)?s.candles:[];dmi=Array.isArray(s.dmi_series)?s.dmi_series:[];
   priceEl.textContent=s.price!=null?Number(s.price).toFixed(8):"—";feedStatus.textContent=s.feed_connected?"LIVE":"WAITING";
-  if(s.asset)assetEl.value=s.asset;if(s.period)timeframeEl.value=s.period;
+  if(!controlsInitialized && !applyingConfig){
+    if(s.asset)assetEl.value=s.asset;
+    if(s.period)timeframeEl.value=s.period;
+    controlsInitialized=true;
+  }
   draw();drawAdx();
   const conf=Number(s.confidence||0), rawSignal=s.signal||"WAIT";
   const ok=rawSignal!=="WAIT"&&conf>=Number(threshold.value);
@@ -75,4 +93,4 @@ function updateFeed(s){
   let di=document.getElementById("diValues");if(di)di.textContent="+DI "+(s.plus_di??"—")+" • −DI "+(s.minus_di??"—")+" • "+(s.wide_cross?"WIDE X":"OVERLAP");
 }
 async function pollState(){try{const r=await fetch("/api/state",{cache:"no-store"});if(r.ok)updateFeed(await r.json())}catch(e){feedStatus.textContent="WAITING"}}
-loadAssets();setInterval(pollState,250);setInterval(clocks,250);pollState();clocks();
+loadAssets().then(()=>pollState());setInterval(pollState,250);setInterval(clocks,250);pollState();clocks();
