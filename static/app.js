@@ -20,6 +20,14 @@ document.querySelectorAll(".tabs button").forEach(btn=>{
   });
 });
 
+function showSelectedAsset(){
+  const asset=assetEl.value||"—";
+  const p=Number(timeframeEl.value||60);
+  if(selectedAssetEl) selectedAssetEl.textContent=asset;
+  if(selectedTimeframeEl) selectedTimeframeEl.textContent="TIMEFRAME: "+(p<60?p+"s":(p%60===0?p/60+"m":p+"s"));
+}
+assetEl.addEventListener("change",showSelectedAsset);
+timeframeEl.addEventListener("change",showSelectedAsset);
 threshold.addEventListener("input",()=>thresholdValue.textContent=threshold.value+"%");
 document.getElementById("apply").addEventListener("click",async()=>{
   applyingConfig=true;
