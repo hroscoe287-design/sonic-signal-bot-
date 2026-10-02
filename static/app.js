@@ -1,5 +1,5 @@
 const canvas=document.getElementById("chart"),ctx=canvas.getContext("2d"),adxCanvas=document.getElementById("adxChart"),adxCtx=adxCanvas.getContext("2d");
-const signalEl=document.getElementById("signal"),reasonEl=document.getElementById("reason"),confidenceEl=document.getElementById("confidence"),meter=document.getElementById("meter"),threshold=document.getElementById("threshold"),thresholdValue=document.getElementById("thresholdValue"),priceEl=document.getElementById("price"),feedStatus=document.getElementById("feedStatus"),assetEl=document.getElementById("asset"),timeframeEl=document.getElementById("timeframe");
+const signalEl=document.getElementById("signal"),reasonEl=document.getElementById("reason"),confidenceEl=document.getElementById("confidence"),meter=document.getElementById("meter"),threshold=document.getElementById("threshold"),thresholdValue=document.getElementById("thresholdValue"),priceEl=document.getElementById("price"),feedStatus=document.getElementById("feedStatus"),assetEl=document.getElementById("asset"),timeframeEl=document.getElementById("timeframe"),selectedAssetEl=document.getElementById("selectedAsset"),selectedTimeframeEl=document.getElementById("selectedTimeframe");
 let state={}, candles=[], dmi=[];
 let controlsInitialized=false;
 let applyingConfig=false;
@@ -30,6 +30,10 @@ document.getElementById("apply").addEventListener("click",async()=>{
     const result=await r.json();
     if(result.ok){
       state.asset=asset; state.period=timeframe; state.timeframe=timeframe+"s";
+      if([...assetEl.options].some(o=>o.value===asset)) assetEl.value=asset;
+      if([...timeframeEl.options].some(o=>Number(o.value)===timeframe)) timeframeEl.value=String(timeframe);
+      if(selectedAssetEl) selectedAssetEl.textContent=asset;
+      if(selectedTimeframeEl) selectedTimeframeEl.textContent="TIMEFRAME: "+(timeframe<60?timeframe+"s":(timeframe%60===0?timeframe/60+"m":timeframe+"s"));
       feedStatus.textContent="SWITCHING";
     }else{
       reasonEl.textContent=result.error||"Unable to change timeframe";
@@ -139,11 +143,14 @@ async function loadAssets(){
 function updateFeed(s){
   state=s;candles=Array.isArray(s.candles)?s.candles:[];dmi=Array.isArray(s.dmi_series)?s.dmi_series:[];
   priceEl.textContent=s.price!=null?Number(s.price).toFixed(8):"—";feedStatus.textContent=s.feed_connected?"LIVE":"WAITING";
-  if(!controlsInitialized && !applyingConfig){
-    if(s.asset)assetEl.value=s.asset;
-    if(s.period)timeframeEl.value=s.period;
-    controlsInitialized=true;
+  if(s.asset && [...assetEl.options].some(o=>o.value===s.asset)) assetEl.value=s.asset;
+  if(s.period && [...timeframeEl.options].some(o=>Number(o.value)===Number(s.period))) timeframeEl.value=String(s.period);
+  if(s.asset && selectedAssetEl) selectedAssetEl.textContent=s.asset;
+  if(s.period && selectedTimeframeEl){
+    const p=Number(s.period);
+    selectedTimeframeEl.textContent="TIMEFRAME: "+(p<60?p+"s":(p%60===0?p/60+"m":p+"s"));
   }
+  controlsInitialized=true;
   draw();drawAdx();
   const conf=Number(s.confidence||0), rawSignal=s.signal||"WAIT";
   const ok=rawSignal!=="WAIT"&&conf>=Number(threshold.value);
