@@ -1,78 +1,12 @@
-const canvas=document.getElementById("chart");
-const ctx=canvas.getContext("2d");
-const signalEl=document.getElementById("signal");
-const reasonEl=document.getElementById("reason");
-const confidenceEl=document.getElementById("confidence");
-const meter=document.getElementById("meter");
-const threshold=document.getElementById("threshold");
-const thresholdValue=document.getElementById("thresholdValue");
-const priceEl=document.getElementById("price");
-const feedStatus=document.getElementById("feedStatus");
-let points=[];
-
+const canvas=document.getElementById("chart"),ctx=canvas.getContext("2d");
+const signalEl=document.getElementById("signal"),reasonEl=document.getElementById("reason"),confidenceEl=document.getElementById("confidence"),meter=document.getElementById("meter"),threshold=document.getElementById("threshold"),thresholdValue=document.getElementById("thresholdValue"),priceEl=document.getElementById("price"),feedStatus=document.getElementById("feedStatus"),assetEl=document.getElementById("asset"),timeframeEl=document.getElementById("timeframe");
+let points=[],state={};
 threshold.addEventListener("input",()=>thresholdValue.textContent=threshold.value+"%");
-document.getElementById("apply").addEventListener("click",()=>{
-  points=[];
-  setWait("Engine reset — waiting for qualifying Fractal + DMI setup");
-  pollState();
-});
-
-function setWait(reason){
-  signalEl.textContent="WAIT"; signalEl.className="signal wait";
-  reasonEl.textContent=reason; confidenceEl.textContent="0%"; meter.style.width="0%";
-  document.getElementById("plusSquares").textContent="□□□□□";
-  document.getElementById("minusSquares").textContent="□□□□□";
-}
-
-function resize(){
-  const dpr=devicePixelRatio||1;
-  const r=canvas.getBoundingClientRect();
-  canvas.width=r.width*dpr; canvas.height=r.height*dpr;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-}
-window.addEventListener("resize",resize); resize();
-
-function draw(){
-  const w=canvas.clientWidth,h=canvas.clientHeight;
-  ctx.clearRect(0,0,w,h);
-  ctx.strokeStyle="rgba(120,190,230,.10)"; ctx.lineWidth=1;
-  for(let i=1;i<8;i++){const y=i*h/8;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
-  for(let i=1;i<10;i++){const x=i*w/10;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}
-  if(points.length<2)return;
-  const min=Math.min(...points),max=Math.max(...points),pad=(max-min)*.2||.0001;
-  ctx.strokeStyle="#35d9ff";ctx.lineWidth=2.5;ctx.beginPath();
-  points.forEach((p,i)=>{
-    const x=i*(w/(points.length-1)); const y=h-((p-(min-pad))/(max-min+2*pad))*h;
-    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
-  });ctx.stroke();
-}
-
-function updateFeed(state){
-  if(!state) return;
-  if(state.price != null) priceEl.textContent=Number(state.price).toFixed(5);
-
-  if(state.feed_connected){
-    feedStatus.textContent="LIVE";
-  } else {
-    feedStatus.textContent="WAITING";
-  }
-
-  const candles=Array.isArray(state.candles)?state.candles:[];
-  if(candles.length){
-    points=candles.slice(-80).map(c=>Number(c.close)).filter(Number.isFinite);
-    draw();
-  }
-}
-
-async function pollState(){
-  try{
-    const response=await fetch("/api/state",{cache:"no-store"});
-    if(response.ok) updateFeed(await response.json());
-  }catch(e){
-    feedStatus.textContent="WAITING";
-  }
-}
-
-setInterval(pollState,250);
-pollState();
-setWait("Waiting for qualifying Fractal + DMI setup");
+document.getElementById("apply").addEventListener("click",async()=>{points=[];await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({asset:assetEl.value,timeframe:Number(timeframeEl.value)})});pollState()});
+function resize(){const d=devicePixelRatio||1,r=canvas.getBoundingClientRect();canvas.width=r.width*d;canvas.height=r.height*d;ctx.setTransform(d,0,0,d,0,0)}window.addEventListener("resize",resize);resize();
+function draw(){const w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);ctx.strokeStyle="rgba(120,190,230,.10)";for(let n=1;n<8;n++){let y=n*h/8;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}if(points.length<2)return;const min=Math.min(...points),max=Math.max(...points),pad=(max-min)*.2||.0001;ctx.strokeStyle="#35d9ff";ctx.lineWidth=2.5;ctx.beginPath();points.forEach((p,n)=>{let x=n*w/(points.length-1),y=h-((p-(min-pad))/(max-min+2*pad))*h;n?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()}
+function clocks(){const now=new Date(),zones={local:Intl.DateTimeFormat().resolvedOptions().timeZone,ny:"America/New_York",london:"Europe/London",tokyo:"Asia/Tokyo"};Object.entries(zones).forEach(([id,z])=>{let e=document.getElementById("clock-"+id);if(e)e.textContent=new Intl.DateTimeFormat("en-US",{timeZone:z,hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(now)});let p=Number(state.period||60),r=p-(Math.floor(Date.now()/1000)%p),e=document.getElementById("countdown");if(e)e.textContent=String(Math.floor(r/60)).padStart(2,"0")+":"+String(r%60).padStart(2,"0")}
+async function loadAssets(){try{let d=await(await fetch("/api/assets")).json();assetEl.innerHTML="";d.assets.forEach(x=>{let o=document.createElement("option");o.value=x;o.textContent=x;assetEl.appendChild(o)});timeframeEl.innerHTML="";d.timeframes.forEach(x=>{let o=document.createElement("option");o.value=x;o.textContent=x<60?x+"s":x/60+"m";timeframeEl.appendChild(o)})}catch(e){}}
+function updateFeed(s){state=s;if(s.price!=null)priceEl.textContent=Number(s.price).toFixed(8);feedStatus.textContent=s.feed_connected?"LIVE":"WAITING";if(s.asset)assetEl.value=s.asset;if(s.period)timeframeEl.value=s.period;let c=Array.isArray(s.candles)?s.candles:[];if(c.length){points=c.slice(-100).map(x=>Number(x.close)).filter(Number.isFinite);draw()}let conf=Number(s.confidence||0),ok=s.signal!=="WAIT"&&conf>=Number(threshold.value);signalEl.textContent=ok?s.signal:"WAIT";signalEl.className="signal "+(ok?s.signal.toLowerCase():"wait");confidenceEl.textContent=conf+"%";meter.style.width=conf+"%";reasonEl.textContent=ok?s.reason:(conf&&conf<Number(threshold.value)?"Setup found below threshold: "+conf+"%":s.reason||"Waiting");document.getElementById("plusSquares").textContent="■".repeat(Number(s.plus_strength||0))+"□".repeat(5-Number(s.plus_strength||0));document.getElementById("minusSquares").textContent="■".repeat(Number(s.minus_strength||0))+"□".repeat(5-Number(s.minus_strength||0));let d=document.getElementById("diValues");if(d)d.textContent="+DI "+(s.plus_di??"—")+" • −DI "+(s.minus_di??"—")+" • "+(s.wide_cross?"WIDE X":"TIGHT X")}
+async function pollState(){try{let r=await fetch("/api/state",{cache:"no-store"});if(r.ok)updateFeed(await r.json())}catch(e){feedStatus.textContent="WAITING"}}
+loadAssets();setInterval(pollState,250);setInterval(clocks,250);pollState();clocks();
