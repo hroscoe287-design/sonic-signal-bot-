@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import threading
 import time
 from pathlib import Path
@@ -217,6 +218,28 @@ def _fractal_marks(candles):
             marks.append({"time":candles[i]["time"],"type":"UP","price":l})
     return marks
 
+def _subscribe_stream(asset, period):
+    """Subscribe using the WebSocket's owning asyncio loop."""
+    if not client or not client.check_connect():
+        return False, "Pocket Option socket is not connected"
+    io_loop = getattr(client, "_io_loop", None)
+    ws_client = getattr(getattr(client, "api", None), "websocket", None)
+    ws = getattr(ws_client, "websocket", None)
+    if io_loop is None or not io_loop.is_running() or ws is None:
+        return False, "Pocket Option WebSocket loop is not ready"
+    async def send_commands():
+        await ws.send('42' + json.dumps(["changeSymbol", {"asset": asset, "period": period}]))
+        await ws.send('42' + json.dumps(["subfor", asset]))
+    try:
+        future = asyncio.run_coroutine_threadsafe(send_commands(), io_loop)
+        future.result(timeout=5)
+        client.api.current_asset = asset
+        client.api.current_period = period
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
+
+
 def _update_engine(candles):
     s,conf,reason,f,d=_evaluate(candles)
     with lock:
@@ -256,7 +279,26 @@ def feed_worker():
             feed["asset_count"] = len(ASSETS)
         if selected_asset not in ASSETS and ASSETS:
             selected_asset = ASSETS[0]
-        client.subscribe(selected_asset, period=selected_period)
+        subscribed, sub_error = _subscribe_stream(selected_asset, selected_period)
+        if not subscribed:
+            with lock:
+                feed["feed_connected"] = False
+                feed["error"] = f"Stream subscription failed: {sub_error}"
+            return
+
+        # Seed fast timeframes with historical ticks so DI is available
+        # immediately instead of waiting for 23+ new 5-second bars.
+        try:
+            seed = client.get_historical_candles(selected_asset, selected_period, offset=9000, count_request=1) or []
+            if seed:
+                seed = seed[-HISTORY:]
+                with lock:
+                    feed["candles"] = seed
+                _update_engine(seed)
+        except Exception as exc:
+            with lock:
+                feed["error"] = f"History seed: {exc}"
+
         with lock:
             feed["feed_connected"] = True
             feed["mode"] = "POCKET_OPTION"
@@ -341,7 +383,10 @@ async def config(body: Config):
         feed["candles"], feed["dmi_series"], feed["fractal_marks"] = [], [], []
     try:
         if client:
-            client.subscribe(selected_asset, period=selected_period)
+            ok, err = _subscribe_stream(selected_asset, selected_period)
+            if not ok:
+                with lock:
+                    feed["error"] = f"Subscription switch: {err}"
     except Exception as exc:
         with lock:
             feed["error"] = f"Subscription switch: {exc}"
