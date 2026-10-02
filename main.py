@@ -21,7 +21,8 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 ASSET = os.getenv("SONIC_ASSET", "EURUSD_otc")
 PERIOD = int(os.getenv("SONIC_TIMEFRAME_SECONDS", "60"))
 TIMEFRAMES = [5,10,15,30,60,120,180,300,600,900,1800,3600]
-ASSETS = """EURUSD_otc AUDCHF_otc AUDUSD_otc CADCHF_otc CADJPY_otc EURCHF_otc GBPJPY_otc GBPUSD_otc USD/CAD_otc USDCHF_otc USDJPY_otc EURTRY_otc USDINR_otc USDPHP_otc USDBDT_otc BHDCNY_otc SARCNY_otc QARCNY_otc OMRCNY_otc NGNUSD_otc ZARUSD_otc UAHUSD_otc EURHUF_otc GBPAUD_otc AUDCAD_otc EURNZD_otc EURRUB_otc AUDJPY_otc USDARS_otc USDMYR_otc USDBRL_otc CHFJPY_otc TNDUSD_otc USDTHB_otc MADUSD_otc USDCLP_otc USDPKR_otc LBPUSD_otc USDVND_otc YERUSD_otc EURJPY_otc USDCNH_otc NZDJPY_otc JODCNY_otc AUDNZD_otc USDRUB_otc USDMXN_otc USDSGD_otc USDIDR_otc AEDCNY_otc Gold_otc BrentOil_otc WTICrudeOil_otc Silver_otc NaturalGas_otc PlatinumSpot_otc PalladiumSpot_otc Microsoft_otc FACEBOOKINC_otc JohnsonJohnson_otc AdvancedMicroDevices_otc CoinbaseGlobal_otc Intel_otc ExxonMobil_otc VIX_otc GameStopCorp_otc PfizerInc_otc Cisco_otc MarathonDigitalHoldings_otc Alibaba_otc Netflix_otc FedEx_otc Apple_otc AmericanExpress_otc Amazon_otc Tesla_otc CitigroupInc_otc BoeingCompany_otc McDonalds_otc VISA_otc PalantirTechnologies_otc Solana_otc Bitcoin_otc Dogecoin_otc Avalanche_otc Litecoin_otc TRON_otc Cardano_otc BitcoinETF_otc Toncoin_otc Ethereum_otc Polkadot_otc Chainlink_otc BNB_otc Polygon_otc AUS200_otc E35EUR_otc 100GBP_otc F40EUR_otc JPN225_otc D30EUR_otc E50EUR_otc SP500_otc DJI30_otc US100_otc EUR/USD AUD/USD AUD/CHF CAD/JPY CAD/CHF GBP/AUD GBP/JPY GBP/USD USD/CAD USD/CHF USD/JPY EUR/CHF EUR/JPY AUD/CAD AUD/JPY AUD/NZD EUR/GBP GBP/CHF GBP/CAD USD/SGD""".split()
+ASSETS = []
+STATIC_ASSET_FALLBACK = "EURUSD_otc AUDCHF_otc AUDUSD_otc CADCHF_otc CADJPY_otc EURCHF_otc GBPJPY_otc GBPUSD_otc USDCHF_otc USDJPY_otc Gold_otc Silver_otc BrentOil_otc WTICrudeOil_otc Bitcoin_otc Ethereum_otc Solana_otc Tesla_otc Apple_otc Amazon_otc Microsoft_otc SP500_otc US100_otc DJI30_otc".split()
 HISTORY = int(os.getenv("SONIC_HISTORY", "300"))
 selected_asset = ASSET
 selected_period = PERIOD
@@ -41,6 +42,7 @@ feed = {
     "age": None,
     "candles": [],
     "error": None,
+    "asset_count": 0,
     "engine": "FRACTAL_3 + DMI_PLUS_MINUS",
     "signal": "WAIT", "confidence": 0, "reason": "Waiting for qualifying setup",
     "fractal": None, "plus_di": None, "minus_di": None, "plus_strength": 0, "minus_strength": 0, "wide_cross": False,
@@ -169,6 +171,14 @@ def feed_worker():
                 feed["error"] = str(err or "Pocket Option connection failed")
             return
 
+        live = client.get_assets() or {}
+        live_names = [str(symbol) for symbol, info in live.items() if isinstance(info, dict) and info.get("is_available", True)]
+        with lock:
+            ASSETS.clear()
+            ASSETS.extend(sorted(set(live_names or STATIC_ASSET_FALLBACK)))
+            feed["asset_count"] = len(ASSETS)
+        if selected_asset not in ASSETS and ASSETS:
+            selected_asset = ASSETS[0]
         client.subscribe(selected_asset, period=selected_period)
         with lock:
             feed["feed_connected"] = True
@@ -231,7 +241,7 @@ async def state():
         snapshot["candles"] = list(feed["candles"])
     return snapshot
 
-@app.get("/api/assets")\nasync def assets():\n    return {"assets": ASSETS, "timeframes": TIMEFRAMES}\n\nclass Config(BaseModel):\n    asset: str\n    timeframe: int\n\n@app.post("/api/config")\nasync def config(body: Config):\n    global selected_asset, selected_period\n    if body.asset not in ASSETS or body.timeframe not in TIMEFRAMES:\n        return {"ok": False, "error": "Unsupported asset or timeframe"}\n    with lock:\n        selected_asset, selected_period = body.asset, body.timeframe\n        feed["asset"], feed["timeframe"] = body.asset, f"{body.timeframe}s"\n        feed["signal"], feed["confidence"] = "WAIT", 0\n        feed["reason"] = "Switching live market feed..."\n    return {"ok": True}\n\n@app.get("/api/health")
+@app.get("/api/assets")\nasync def assets():\n    return {"assets": list(ASSETS), "timeframes": TIMEFRAMES, "live_catalog": bool(ASSETS), "count": len(ASSETS)}\n\nclass Config(BaseModel):\n    asset: str\n    timeframe: int\n\n@app.post("/api/config")\nasync def config(body: Config):\n    global selected_asset, selected_period\n    if body.asset not in ASSETS or body.timeframe not in TIMEFRAMES:\n        return {"ok": False, "error": "Unsupported asset or timeframe"}\n    with lock:\n        selected_asset, selected_period = body.asset, body.timeframe\n        feed["asset"], feed["timeframe"] = body.asset, f"{body.timeframe}s"\n        feed["signal"], feed["confidence"] = "WAIT", 0\n        feed["reason"] = "Switching live market feed..."\n    return {"ok": True}\n\n@app.get("/api/health")
 async def health():
     with lock:
         return {
@@ -242,4 +252,5 @@ async def health():
             "timeframe": feed["timeframe"],
             "error": feed["error"],
             "engine": "SONIC_FRACTAL_DMI",
+            "asset_count": feed["asset_count"],
         }
