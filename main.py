@@ -277,6 +277,9 @@ def feed_worker():
             ASSETS.clear()
             ASSETS.extend(sorted(set(live_names or STATIC_ASSET_FALLBACK)))
             feed["asset_count"] = len(ASSETS)
+            feed["asset"] = selected_asset
+            feed["period"] = selected_period
+            feed["timeframe"] = f"{selected_period}s"
         if selected_asset not in ASSETS and ASSETS:
             selected_asset = ASSETS[0]
         subscribed, sub_error = _subscribe_stream(selected_asset, selected_period)
@@ -294,6 +297,12 @@ def feed_worker():
                 seed = seed[-HISTORY:]
                 with lock:
                     feed["candles"] = seed
+                    feed["dmi_series"] = _indicator_series(seed, 7, 14)[-120:]
+                    feed["fractal_marks"] = _fractal_marks(seed)[-40:]
+                    if seed:
+                        feed["price"] = round(float(seed[-1]["close"]), 8)
+                        feed["timestamp"] = float(seed[-1]["time"])
+                        feed["age"] = max(0.0, time.time() - float(seed[-1]["time"]))
                 _update_engine(seed)
         except Exception as exc:
             with lock:
