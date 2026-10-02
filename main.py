@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI
+from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -22,6 +23,8 @@ PERIOD = int(os.getenv("SONIC_TIMEFRAME_SECONDS", "60"))
 TIMEFRAMES = [5,10,15,30,60,120,180,300,600,900,1800,3600]
 ASSETS = """EURUSD_otc AUDCHF_otc AUDUSD_otc CADCHF_otc CADJPY_otc EURCHF_otc GBPJPY_otc GBPUSD_otc USD/CAD_otc USDCHF_otc USDJPY_otc EURTRY_otc USDINR_otc USDPHP_otc USDBDT_otc BHDCNY_otc SARCNY_otc QARCNY_otc OMRCNY_otc NGNUSD_otc ZARUSD_otc UAHUSD_otc EURHUF_otc GBPAUD_otc AUDCAD_otc EURNZD_otc EURRUB_otc AUDJPY_otc USDARS_otc USDMYR_otc USDBRL_otc CHFJPY_otc TNDUSD_otc USDTHB_otc MADUSD_otc USDCLP_otc USDPKR_otc LBPUSD_otc USDVND_otc YERUSD_otc EURJPY_otc USDCNH_otc NZDJPY_otc JODCNY_otc AUDNZD_otc USDRUB_otc USDMXN_otc USDSGD_otc USDIDR_otc AEDCNY_otc Gold_otc BrentOil_otc WTICrudeOil_otc Silver_otc NaturalGas_otc PlatinumSpot_otc PalladiumSpot_otc Microsoft_otc FACEBOOKINC_otc JohnsonJohnson_otc AdvancedMicroDevices_otc CoinbaseGlobal_otc Intel_otc ExxonMobil_otc VIX_otc GameStopCorp_otc PfizerInc_otc Cisco_otc MarathonDigitalHoldings_otc Alibaba_otc Netflix_otc FedEx_otc Apple_otc AmericanExpress_otc Amazon_otc Tesla_otc CitigroupInc_otc BoeingCompany_otc McDonalds_otc VISA_otc PalantirTechnologies_otc Solana_otc Bitcoin_otc Dogecoin_otc Avalanche_otc Litecoin_otc TRON_otc Cardano_otc BitcoinETF_otc Toncoin_otc Ethereum_otc Polkadot_otc Chainlink_otc BNB_otc Polygon_otc AUS200_otc E35EUR_otc 100GBP_otc F40EUR_otc JPN225_otc D30EUR_otc E50EUR_otc SP500_otc DJI30_otc US100_otc EUR/USD AUD/USD AUD/CHF CAD/JPY CAD/CHF GBP/AUD GBP/JPY GBP/USD USD/CAD USD/CHF USD/JPY EUR/CHF EUR/JPY AUD/CAD AUD/JPY AUD/NZD EUR/GBP GBP/CHF GBP/CAD USD/SGD""".split()
 HISTORY = int(os.getenv("SONIC_HISTORY", "300"))
+selected_asset = ASSET
+selected_period = PERIOD
 
 PO_AUTH_JSON = os.getenv("PO_AUTH_JSON", "").strip()
 
@@ -32,6 +35,7 @@ feed = {
     "mode": "NOT_CONFIGURED",
     "asset": ASSET,
     "timeframe": f"{PERIOD}s",
+    "period": PERIOD,
     "price": None,
     "timestamp": None,
     "age": None,
@@ -177,7 +181,7 @@ def feed_worker():
             cycle_start = time.monotonic()
             try:
                 ticks = client.get_realtime_ticks(
-                    ASSET,
+                    selected_asset,
                     limit=max(250, min(1000, HISTORY * max(1, PERIOD // 2)))
                 )
                 normalized = []
@@ -189,7 +193,8 @@ def feed_worker():
                 if normalized:
                     normalized.sort(key=lambda x: x[0])
                     candles = build_candles(normalized)
-                    _update_engine(candles)\n                    last_ts, last_price = normalized[-1]
+                    _update_engine(candles)
+                    last_ts, last_price = normalized[-1]
                     with lock:
                         feed["feed_connected"] = True
                         feed["price"] = round(last_price, 5)
