@@ -410,9 +410,21 @@ def feed_worker():
             feed["feed_connected"] = False
             feed["error"] = str(exc)
 
+def feed_supervisor():
+    # Keep the market feed alive if Pocket Option disconnects or the worker exits.
+    # A feed failure must never take the web app down.
+    while True:
+        try:
+            feed_worker()
+        except Exception as exc:
+            with lock:
+                feed["feed_connected"] = False
+                feed["error"] = str(exc)
+        time.sleep(3)
+
 @app.on_event("startup")
 def start_feed():
-    threading.Thread(target=feed_worker, daemon=True, name="pocket-option-feed").start()
+    threading.Thread(target=feed_supervisor, daemon=True, name="pocket-option-feed-supervisor").start()
 
 @app.get("/")
 async def home():
