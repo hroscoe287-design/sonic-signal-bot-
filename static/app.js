@@ -75,6 +75,20 @@ function draw(){
     if(upMark){ctx.moveTo(mx,my+10);ctx.lineTo(mx-6,my+20);ctx.lineTo(mx+6,my+20);}else{ctx.moveTo(mx,my-10);ctx.lineTo(mx-6,my-20);ctx.lineTo(mx+6,my-20);}
     ctx.closePath();ctx.fill();
   }
+  // Highlight the exact fractal candle used by the signal engine.
+  var sf=Number(state.signal_fractal_time);
+  if(isFinite(sf)){
+    for(j=0;j<view.length;j++){
+      if(Number(view[j].time)===sf){
+        var sx=left+j*step+step/2, sy=yp(Number(state.signal_fractal_price));
+        ctx.strokeStyle="#ffd21c";ctx.lineWidth=2;ctx.beginPath();
+        ctx.arc(sx,sy,8,0,Math.PI*2);ctx.stroke();
+        ctx.fillStyle="#ffd21c";ctx.font="9px sans-serif";
+        ctx.fillText("SIGNAL SOURCE",Math.max(left,sx-30),Math.max(10,sy-25));
+        break;
+      }
+    }
+  }
 }
 function drawAdx(){
   if(!adxCanvas||!adxCtx)return;
@@ -113,7 +127,14 @@ function updateFeed(s){
   draw();drawAdx();
   var conf=Number(state.confidence||0),raw=state.signal||"WAIT",ok=raw!=="WAIT"&&conf>=Number(threshold.value);
   signalEl.textContent=ok?raw:"WAIT";signalEl.className="signal "+(ok?String(raw).toLowerCase():"wait");confidenceEl.textContent=conf+"%";meter.style.width=Math.min(100,conf)+"%";
-  reasonEl.textContent=ok?state.reason:(raw!=="WAIT"?"Signal below threshold: "+conf+"% • "+state.reason:(state.reason||"Waiting"));
+  var sourceText="";
+  if(state.fractal&&state.signal_fractal_time!=null){
+    sourceText=" • SOURCE "+state.fractal+" @ "+new Date(Number(state.signal_fractal_time)*1000).toLocaleTimeString();
+  }
+  if(state.signal_plus_di!=null&&state.signal_minus_di!=null){
+    sourceText+=" • +DI "+Number(state.signal_plus_di).toFixed(2)+" / -DI "+Number(state.signal_minus_di).toFixed(2);
+  }
+  reasonEl.textContent=(ok?state.reason:(raw!=="WAIT"?"Signal below threshold: "+conf+"% • "+state.reason:(state.reason||"Waiting")))+sourceText;
   var ps=Number(state.plus_strength||0),ms=Number(state.minus_strength||0);$("plusSquares").textContent="■■■■■".slice(0,ps)+"□□□□□".slice(0,5-ps);$("minusSquares").textContent="■■■■■".slice(0,ms)+"□□□□□".slice(0,5-ms);
   var di=$("diValues");if(di)di.textContent="+DI "+(state.plus_di==null?"—":state.plus_di)+" • -DI "+(state.minus_di==null?"—":state.minus_di)+" • "+(state.wide_cross?"WIDE X":"OVERLAP");
 }
