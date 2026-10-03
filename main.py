@@ -621,3 +621,44 @@ async def backtest_di():
             "puts": puts
         })
     return {"ok": True, "asset": "EURUSD_otc", "timeframe": "1m", "expiry": "1 candle", "candles": len(candles), "results": results}
+
+
+def _run_di_backtest_log():
+    for _ in range(60):
+        if client and client.check_connect():
+            break
+        time.sleep(1)
+    if not client or not client.check_connect():
+        print("SONIC_DI_BACKTEST ERROR: feed client not ready", flush=True)
+        return
+    candles = _load_history("EURUSD_otc", 60)
+    thresholds = [0, 2, 4, 6, 8, 10]
+    results = []
+    for threshold in thresholds:
+        wins = losses = ties = signals = calls = puts = 0
+        for i in range(30, len(candles) - 1):
+            entry = candles[i]["close"]
+            exit_price = candles[i + 1]["close"]
+            sig, conf, reason, fractal, d = _evaluate(candles[:i + 1])
+            if not d or sig not in ("CALL", "PUT"):
+                continue
+            if abs(d["plus"] - d["minus"]) < threshold:
+                continue
+            signals += 1
+            if sig == "CALL":
+                calls += 1
+                if exit_price > entry: wins += 1
+                elif exit_price < entry: losses += 1
+                else: ties += 1
+            else:
+                puts += 1
+                if exit_price < entry: wins += 1
+                elif exit_price > entry: losses += 1
+                else: ties += 1
+        denom = wins + losses
+        results.append({"gap": threshold, "signals": signals, "wins": wins, "losses": losses, "ties": ties, "win_rate": round(wins * 100 / denom, 2) if denom else 0, "calls": calls, "puts": puts})
+    print("SONIC_DI_BACKTEST " + json.dumps({"candles": len(candles), "asset": "EURUSD_otc", "tf": "1m", "expiry": "1 candle", "results": results}), flush=True)
+
+@app.on_event("startup")
+def start_di_backtest():
+    threading.Thread(target=_run_di_backtest_log, daemon=True, name="di-threshold-backtest").start()
