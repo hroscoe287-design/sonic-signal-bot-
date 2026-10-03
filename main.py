@@ -574,3 +574,83 @@ async def health():
             "engine": "SONIC_ADX_DI7_SMOOTH14_FRACTAL3",
             "asset_count": feed["asset_count"],
         }
+
+
+@app.get("/api/backtest")
+async def backtest():
+    """One-minute baseline backtest using the exact live Sonic decision engine."""
+    try:
+        if not client or not client.check_connect():
+            return {"ok": False, "error": "Pocket Option feed is not connected"}
+        rows = client.get_historical_candles(
+            "EURUSD_otc", 60,
+            offset=18000,
+            count_request=1
+        ) or []
+        candles = []
+        for item in rows:
+            try:
+                if isinstance(item, dict):
+                    ts=float(item.get("time", item.get("timestamp", item.get("ts"))))
+                    o=float(item["open"]); h=float(item["high"]); l=float(item["low"]); cl=float(item["close"])
+                elif isinstance(item,(list,tuple)) and len(item)>=5:
+                    ts=float(item[0]); o=float(item[1]); cl=float(item[2]); h=float(item[3]); l=float(item[4])
+                else:
+                    continue
+                candles.append({"time":ts,"open":o,"high":h,"low":l,"close":cl})
+            except (TypeError,ValueError,KeyError):
+                continue
+        candles.sort(key=lambda x:x["time"])
+        if len(candles) < 30:
+            return {"ok": False, "error": f"Only {len(candles)} candles available"}
+
+        trades=[]
+        for i in range(25, len(candles)-1):
+            signal, confidence, reason, fractal, d = _evaluate(candles[:i+1])
+            if signal not in ("CALL","PUT"):
+                continue
+            entry=float(candles[i]["close"])
+            exit_price=float(candles[i+1]["close"])
+            if signal=="CALL":
+                result="WIN" if exit_price>entry else ("LOSS" if exit_price<entry else "TIE")
+            else:
+                result="WIN" if exit_price<entry else ("LOSS" if exit_price>entry else "TIE")
+            trades.append({
+                "time": candles[i]["time"],
+                "signal": signal,
+                "confidence": confidence,
+                "entry": entry,
+                "exit": exit_price,
+                "result": result,
+                "reason": reason,
+                "fractal": fractal
+            })
+
+        wins=sum(t["result"]=="WIN" for t in trades)
+        losses=sum(t["result"]=="LOSS" for t in trades)
+        ties=sum(t["result"]=="TIE" for t in trades)
+        settled=wins+losses
+        calls=[t for t in trades if t["signal"]=="CALL"]
+        puts=[t for t in trades if t["signal"]=="PUT"]
+        call_wins=sum(t["result"]=="WIN" for t in calls)
+        put_wins=sum(t["result"]=="WIN" for t in puts)
+        return {
+            "ok": True,
+            "asset": "EURUSD_otc",
+            "timeframe": "1m",
+            "expiry": "1 candle / 1 minute",
+            "candles_tested": len(candles),
+            "signals": len(trades),
+            "wins": wins,
+            "losses": losses,
+            "ties": ties,
+            "win_rate": round((wins/settled*100),2) if settled else 0,
+            "call_signals": len(calls),
+            "call_wins": call_wins,
+            "put_signals": len(puts),
+            "put_wins": put_wins,
+            "average_confidence": round(sum(t["confidence"] for t in trades)/len(trades),2) if trades else 0,
+            "last_trades": trades[-25:]
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
