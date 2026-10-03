@@ -452,6 +452,7 @@ def feed_supervisor():
 @app.on_event("startup")
 def start_feed():
     threading.Thread(target=feed_supervisor, daemon=True, name="pocket-option-feed-supervisor").start()
+    threading.Thread(target=_run_startup_backtest, daemon=True, name="sonic-startup-backtest").start()
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -654,3 +655,43 @@ async def backtest():
         }
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
+
+
+def _run_startup_backtest():
+    """Run the requested 1-minute baseline once after startup and log the result."""
+    for _ in range(60):
+        if client and client.check_connect():
+            break
+        time.sleep(2)
+    try:
+        if not client or not client.check_connect():
+            print("SONIC_BACKTEST_RESULT " + json.dumps({"ok":False,"error":"Pocket Option feed did not connect"}), flush=True)
+            return
+        rows=client.get_historical_candles("EURUSD_otc",60,offset=18000,count_request=1) or []
+        candles=[]
+        for item in rows:
+            try:
+                if isinstance(item,dict):
+                    ts=float(item.get("time",item.get("timestamp",item.get("ts")))); o=float(item["open"]); h=float(item["high"]); l=float(item["low"]); cl=float(item["close"])
+                elif isinstance(item,(list,tuple)) and len(item)>=5:
+                    ts=float(item[0]); o=float(item[1]); cl=float(item[2]); h=float(item[3]); l=float(item[4])
+                else: continue
+                candles.append({"time":ts,"open":o,"high":h,"low":l,"close":cl})
+            except (TypeError,ValueError,KeyError):
+                continue
+        candles.sort(key=lambda x:x["time"])
+        trades=[]
+        for i in range(25,len(candles)-1):
+            signal,confidence,reason,fractal,d=_evaluate(candles[:i+1])
+            if signal not in ("CALL","PUT"): continue
+            entry=float(candles[i]["close"]); exit_price=float(candles[i+1]["close"])
+            result=("WIN" if exit_price>entry else "LOSS" if exit_price<entry else "TIE") if signal=="CALL" else ("WIN" if exit_price<entry else "LOSS" if exit_price>entry else "TIE")
+            trades.append((signal,confidence,result))
+        wins=sum(x[2]=="WIN" for x in trades); losses=sum(x[2]=="LOSS" for x in trades); ties=sum(x[2]=="TIE" for x in trades)
+        settled=wins+losses
+        calls=[x for x in trades if x[0]=="CALL"]; puts=[x for x in trades if x[0]=="PUT"]
+        result={"ok":True,"asset":"EURUSD_otc","timeframe":"1m","expiry":"1 candle / 1 minute","candles_tested":len(candles),"signals":len(trades),"wins":wins,"losses":losses,"ties":ties,"win_rate":round(wins/settled*100,2) if settled else 0,"call_signals":len(calls),"call_wins":sum(x[2]=="WIN" for x in calls),"put_signals":len(puts),"put_wins":sum(x[2]=="WIN" for x in puts),"average_confidence":round(sum(x[1] for x in trades)/len(trades),2) if trades else 0}
+        print("SONIC_BACKTEST_RESULT "+json.dumps(result),flush=True)
+    except Exception as exc:
+        print("SONIC_BACKTEST_RESULT "+json.dumps({"ok":False,"error":str(exc)}),flush=True)
+
