@@ -47,6 +47,8 @@ feed = {
     "engine": "ADX_DI7_SMOOTH14 + FRACTAL3",
     "signal": "WAIT", "confidence": 0, "reason": "Waiting for qualifying setup",
     "fractal": None, "plus_di": None, "minus_di": None, "plus_strength": 0, "minus_strength": 0, "wide_cross": False,
+    "signal_fractal_time": None, "signal_fractal_price": None, "signal_di_time": None,
+    "signal_plus_di": None, "signal_minus_di": None, "signal_evaluated_at": None,
     "dmi_series": [], "fractal_marks": [],
 }
 
@@ -136,21 +138,27 @@ def _fractal3(c):
     return None
 
 def _evaluate(c):
+    evaluated_at=time.time()
     d=_adx(c,7,14)
+    meta={"fractal_time":None,"fractal_price":None,"di_time":(c[-1]["time"] if c else None),"evaluated_at":evaluated_at}
     if not d:
-        return "WAIT",0,"Waiting for ADX DI 7/14 data",None,d
+        return "WAIT",0,"Waiting for ADX DI 7/14 data",None,d,meta
 
     # Use the most recent confirmed Fractal 3 so Sonic stays fast on 15s
     # charts instead of waiting for a brand-new fractal on every candle.
     f=None
+    fractal_index=None
     start=len(c)-3
     stop=max(2,len(c)-11)
     for i in range(start,stop-1,-1):
         h=c[i]["high"]; l=c[i]["low"]
         if h>c[i-1]["high"] and h>c[i-2]["high"] and h>c[i+1]["high"] and h>c[i+2]["high"]:
-            f="DOWN"; break
+            f="DOWN"; fractal_index=i; break
         if l<c[i-1]["low"] and l<c[i-2]["low"] and l<c[i+1]["low"] and l<c[i+2]["low"]:
-            f="UP"; break
+            f="UP"; fractal_index=i; break
+    if fractal_index is not None:
+        meta["fractal_time"]=c[fractal_index]["time"]
+        meta["fractal_price"]=c[fractal_index]["high"] if f=="DOWN" else c[fractal_index]["low"]
     # Fast ADX fallback: if a confirmed Fractal 3 is not available yet,
     # do not let Sonic remain stuck on WAIT. The DI relationship itself can
     # trigger a fast signal; a matching Fractal, when present, remains the
@@ -293,12 +301,17 @@ def _seed_dashboard(asset, period):
 
 
 def _update_engine(candles):
-    s,conf,reason,f,d=_evaluate(candles)
+    s,conf,reason,f,d,meta=_evaluate(candles)
     with lock:
         feed["signal"],feed["confidence"],feed["reason"]=s,conf,reason
         feed["fractal"]=f
+        feed["signal_fractal_time"]=meta.get("fractal_time")
+        feed["signal_fractal_price"]=meta.get("fractal_price")
+        feed["signal_di_time"]=meta.get("di_time")
+        feed["signal_evaluated_at"]=meta.get("evaluated_at")
         if d:
             feed["plus_di"],feed["minus_di"]=round(d["plus"],2),round(d["minus"],2)
+            feed["signal_plus_di"],feed["signal_minus_di"]=round(d["plus"],2),round(d["minus"],2)
             feed["plus_strength"]=min(5,max(0,round(d["plus"]/10)))
             feed["minus_strength"]=min(5,max(0,round(d["minus"]/10)))
             feed["wide_cross"]=abs(d["plus"]-d["minus"])>=max(5,d["plus"]*.22,d["minus"]*.22)
