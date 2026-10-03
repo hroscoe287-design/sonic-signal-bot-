@@ -140,18 +140,17 @@ def _evaluate(c):
     if not d:
         return "WAIT",0,"Waiting for ADX DI 7/14 data",None,d
 
-    # Use the most recent confirmed Fractal 2 so Sonic stays fast on 15s
-    # charts instead of waiting for a brand-new fractal on every candle.
+    # Use the most recent confirmed Fractal 2: one candle on each side.
     f=None
-    start=len(c)-3
-    stop=max(2,len(c)-11)
+    start=len(c)-2
+    stop=max(1,len(c)-11)
     for i in range(start,stop-1,-1):
         h=c[i]["high"]; l=c[i]["low"]
-        if h>c[i-1]["high"] and h>c[i-2]["high"] and h>c[i+1]["high"] and h>c[i+2]["high"]:
+        if h>c[i-1]["high"] and h>c[i+1]["high"]:
             f="DOWN"; break
-        if l<c[i-1]["low"] and l<c[i-2]["low"] and l<c[i+1]["low"] and l<c[i+2]["low"]:
+        if l<c[i-1]["low"] and l<c[i+1]["low"]:
             f="UP"; break
-    # Fast ADX fallback: if a confirmed Fractal 3 is not available yet,
+    # Fast ADX fallback: if a confirmed Fractal 2 is not available yet,
     # do not let Sonic remain stuck on WAIT. The DI relationship itself can
     # trigger a fast signal; a matching Fractal, when present, remains the
     # preferred confirmation path.
