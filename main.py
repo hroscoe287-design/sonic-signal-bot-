@@ -44,7 +44,7 @@ feed = {
     "candles": [],
     "error": None,
     "asset_count": 0,
-    "engine": "ADX_DI7_SMOOTH14 + FRACTAL3",
+    "engine": "ADX_DI7_SMOOTH14 + FRACTAL2",
     "signal": "WAIT", "confidence": 0, "reason": "Waiting for qualifying setup",
     "fractal": None, "plus_di": None, "minus_di": None, "plus_strength": 0, "minus_strength": 0, "wide_cross": False,
     "dmi_series": [], "fractal_marks": [],
@@ -128,11 +128,11 @@ def _adx(candles, di_length=7, adx_smoothing=14):
     adx=adx_vals[-1] if adx_vals else 0
     return {"plus":p[-1],"minus":mn[-1],"plus_prev":p[-2],"minus_prev":mn[-2],"adx":adx}
 
-def _fractal3(c):
-    if len(c)<5:return None
-    h=[x["high"] for x in c]; l=[x["low"] for x in c]; j=len(c)-3
-    if h[j]>h[j-1] and h[j]>h[j-2] and h[j]>h[j+1] and h[j]>h[j+2]: return "DOWN"
-    if l[j]<l[j-1] and l[j]<l[j-2] and l[j]<l[j+1] and l[j]<l[j+2]: return "UP"
+def _fractal2(c):
+    if len(c)<3:return None
+    h=[x["high"] for x in c]; l=[x["low"] for x in c]; j=len(c)-2
+    if h[j]>h[j-1] and h[j]>h[j+1]: return "DOWN"
+    if l[j]<l[j-1] and l[j]<l[j+1]: return "UP"
     return None
 
 def _evaluate(c):
@@ -140,7 +140,7 @@ def _evaluate(c):
     if not d:
         return "WAIT",0,"Waiting for ADX DI 7/14 data",None,d
 
-    # Use the most recent confirmed Fractal 3 so Sonic stays fast on 15s
+    # Use the most recent confirmed Fractal 2 so Sonic stays fast on 15s
     # charts instead of waiting for a brand-new fractal on every candle.
     f=None
     start=len(c)-3
@@ -571,6 +571,6 @@ async def health():
             "asset": feed["asset"],
             "timeframe": feed["timeframe"],
             "error": feed["error"],
-            "engine": "SONIC_ADX_DI7_SMOOTH14_FRACTAL3",
+            "engine": "SONIC_ADX_DI7_SMOOTH14_FRACTAL2",
             "asset_count": feed["asset_count"],
         }
