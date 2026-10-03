@@ -574,3 +574,43 @@ async def health():
             "engine": "SONIC_ADX_DI7_SMOOTH14_FRACTAL2",
             "asset_count": feed["asset_count"],
         }
+
+
+@app.get("/api/backtest")
+async def backtest():
+    """Temporary Fractal 2 backtest: EURUSD_otc, 1m, next-candle close expiry."""
+    try:
+        rows = client.get_historical_candles("EURUSD_otc", 60, offset=max(12000, 60*180*3), count_request=1) or []
+        candles = []
+        for item in rows:
+            try:
+                if isinstance(item, dict):
+                    ts=float(item.get("time", item.get("timestamp", item.get("ts"))))
+                    o=float(item["open"]); h=float(item["high"]); l=float(item["low"]); cl=float(item["close"])
+                elif isinstance(item,(list,tuple)) and len(item)>=5:
+                    ts=float(item[0]); o=float(item[1]); cl=float(item[2]); h=float(item[3]); l=float(item[4])
+                else:
+                    continue
+                candles.append({"time":ts,"open":o,"high":h,"low":l,"close":cl})
+            except Exception:
+                continue
+        candles.sort(key=lambda x:x["time"])
+        candles=candles[-149:]
+        signals=wins=losses=ties=0
+        calls=puts=0
+        for i in range(5, len(candles)-1):
+            prefix=candles[:i+1]
+            s,conf,reason,f,d=_evaluate(prefix)
+            if s not in ("CALL","PUT"):
+                continue
+            signals += 1
+            if s=="CALL": calls += 1
+            else: puts += 1
+            entry=candles[i]["close"]; exitp=candles[i+1]["close"]
+            if exitp==entry: ties += 1
+            elif (s=="CALL" and exitp>entry) or (s=="PUT" and exitp<entry): wins += 1
+            else: losses += 1
+        denom=wins+losses
+        return {"ok":True,"engine":"SONIC_ADX_DI7_SMOOTH14_FRACTAL2","asset":"EURUSD_otc","timeframe":"1m","expiry":"1 candle","candles_tested":len(candles),"signals":signals,"wins":wins,"losses":losses,"ties":ties,"win_rate":round(wins/denom*100,2) if denom else 0,"calls":calls,"puts":puts}
+    except Exception as exc:
+        return {"ok":False,"error":str(exc)}
