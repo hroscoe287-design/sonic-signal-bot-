@@ -574,3 +574,50 @@ async def health():
             "engine": "SONIC_ADX_DI7_SMOOTH14_FRACTAL3",
             "asset_count": feed["asset_count"],
         }
+
+
+@app.get("/api/backtest-di")
+async def backtest_di():
+    # Temporary research endpoint: evaluates the current engine, then applies
+    # only a minimum DI separation gate. Production strategy is unchanged.
+    if not client:
+        return {"ok": False, "error": "feed client not ready"}
+    candles = _load_history("EURUSD_otc", 60)
+    if len(candles) < 40:
+        return {"ok": False, "error": "not enough historical candles", "candles": len(candles)}
+    thresholds = [0, 2, 4, 6, 8, 10]
+    results = []
+    for threshold in thresholds:
+        wins = losses = ties = signals = calls = puts = 0
+        for i in range(30, len(candles) - 1):
+            entry = candles[i]["close"]
+            exit_price = candles[i + 1]["close"]
+            sig, conf, reason, fractal, d = _evaluate(candles[:i + 1])
+            if not d or sig not in ("CALL", "PUT"):
+                continue
+            gap = abs(d["plus"] - d["minus"])
+            if gap < threshold:
+                continue
+            signals += 1
+            if sig == "CALL":
+                calls += 1
+                if exit_price > entry: wins += 1
+                elif exit_price < entry: losses += 1
+                else: ties += 1
+            else:
+                puts += 1
+                if exit_price < entry: wins += 1
+                elif exit_price > entry: losses += 1
+                else: ties += 1
+        denom = wins + losses
+        results.append({
+            "di_gap_min": threshold,
+            "signals": signals,
+            "wins": wins,
+            "losses": losses,
+            "ties": ties,
+            "win_rate": round((wins / denom) * 100, 2) if denom else 0,
+            "calls": calls,
+            "puts": puts
+        })
+    return {"ok": True, "asset": "EURUSD_otc", "timeframe": "1m", "expiry": "1 candle", "candles": len(candles), "results": results}
