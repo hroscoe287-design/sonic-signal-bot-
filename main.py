@@ -173,8 +173,8 @@ def _evaluate(c):
         else:
             conf=80
         if d["minus"]>=d["plus"]:
-            return "PUT",conf,"ADX DI overlap/dominance (−DI on top)",None,d
-        return "CALL",conf,"ADX DI overlap/dominance (+DI on top)",None,d
+            return "PUT",conf,"ADX DI overlap/dominance (−DI on top)",None,d,meta
+        return "CALL",conf,"ADX DI overlap/dominance (+DI on top)",None,d,meta
 
     # Sonic overlap rule:
     # - The Fractal arrow supplies the setup direction.
@@ -200,13 +200,13 @@ def _evaluate(c):
 
     if f=="UP" and d["minus"]>=d["plus"]:
         label="WIDE" if wide else ("MEDIUM" if gap>=3 else "SMALL")
-        return "PUT",conf,f"Fractal UP + −DI on top ({label})",f,d
+        return "PUT",conf,f"Fractal UP + −DI on top ({label})",f,d,meta
 
     if f=="DOWN" and d["plus"]>=d["minus"]:
         label="WIDE" if wide else ("MEDIUM" if gap>=3 else "SMALL")
-        return "CALL",conf,f"Fractal DOWN + +DI on top ({label})",f,d
+        return "CALL",conf,f"Fractal DOWN + +DI on top ({label})",f,d,meta
 
-    return "WAIT",0,"Fractal and DI direction are conflicting",f,d
+    return "WAIT",0,"Fractal and DI direction are conflicting",f,d,meta
 
 def _indicator_series(candles, di_length=7, adx_smoothing=14):
     rows=[]
