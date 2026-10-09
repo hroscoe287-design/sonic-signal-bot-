@@ -10,8 +10,29 @@ from pydantic import BaseModel
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+# Prefer the currently documented Pocket Option regional endpoints while
+# retaining the library's existing endpoints as fallbacks.
+import logging
+logging.basicConfig(level=os.getenv("SONIC_LOG_LEVEL", "INFO").upper())
 try:
     from pocketoptionapi.stable_api import PocketOption
+    try:
+        from pocketoptionapi.constants import REGION
+        REGION.REAL_SERVERS = {
+            "EU": "wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket",
+            "US_NORTH": "wss://api-us-north.po.market/socket.io/?EIO=4&transport=websocket",
+            "US_SOUTH": "wss://api-us-south.po.market/socket.io/?EIO=4&transport=websocket",
+            "MSK": "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket",
+            "SPB": "wss://api-spb.po.market/socket.io/?EIO=4&transport=websocket",
+            "EU_2": "wss://api-eu2.po.market/socket.io/?EIO=4&transport=websocket",
+            "US": "wss://api-us2.po.market/socket.io/?EIO=4&transport=websocket",
+        }
+        REGION.DEMO_SERVERS = {
+            "DEMO_EU": "wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket",
+            "DEMO_EU_2": "wss://try-demo-eu.po.market/socket.io/?EIO=4&transport=websocket",
+        }
+    except Exception:
+        logging.exception("Could not configure Pocket Option regional endpoints")
 except Exception:
     PocketOption = None
 
